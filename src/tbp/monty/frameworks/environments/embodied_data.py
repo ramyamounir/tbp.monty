@@ -647,7 +647,6 @@ class InformedEnvironmentDataLoader(EnvironmentDataLoaderPerObject):
                 break
         return on_target_object
 
-
     def execute_jump_attempt(self):
         """Attempt a hypothesis-testing "jump" onto a location of the object.
 

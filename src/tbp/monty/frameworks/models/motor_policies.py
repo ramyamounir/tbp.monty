@@ -841,6 +841,7 @@ class InformedPolicy(BasePolicy, JumpToGoalStateMixin):
         on_target_object = semantic[y_mid, x_mid] == target_semantic_id
         return on_target_object
 
+
 class NaiveScanPolicy(InformedPolicy):
     """Policy that just moves left and right along the object."""
 
@@ -1337,9 +1338,9 @@ class SurfacePolicy(InformedPolicy):
         x, y, z = rotated_point_normal
 
         if "horizontal" == orienting:
-            return -np.degrees(np.arctan(x / z)) if z != 0 else -np.sign(x)*90.0
+            return -np.degrees(np.arctan(x / z)) if z != 0 else -np.sign(x) * 90.0
         if "vertical" == orienting:
-            return -np.degrees(np.arctan(y / z)) if z != 0 else -np.sign(y)*90.0
+            return -np.degrees(np.arctan(y / z)) if z != 0 else -np.sign(y) * 90.0
 
 
 ###

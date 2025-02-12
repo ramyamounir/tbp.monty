@@ -87,6 +87,16 @@ NAMES.extend(field.name for field in fields(YcbExperiments))
 
 
 @dataclass
+class UnsupervisedExperiments:
+    unsupervised_distinctobj_surf_agent: dict
+    unsupervised_distinctobj_dist_agent: dict
+    pass
+
+
+NAMES.extend(field.name for field in fields(UnsupervisedExperiments))
+
+
+@dataclass
 class MyExperiments:
     # Add your experiment names here
     pass
