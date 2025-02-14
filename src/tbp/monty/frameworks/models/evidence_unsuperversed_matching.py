@@ -8,8 +8,7 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT.
 
-from tbp.monty.frameworks.models.evidence_matching import \
-    MontyForEvidenceGraphMatching
+from tbp.monty.frameworks.models.evidence_matching import MontyForEvidenceGraphMatching
 
 
 class MontyForUnsupervisedEvidenceGraphMatching(MontyForEvidenceGraphMatching):
@@ -22,6 +21,8 @@ class MontyForUnsupervisedEvidenceGraphMatching(MontyForEvidenceGraphMatching):
             self.init_pre_episode = True
             return super().pre_episode(primary_target, semantic_id_to_label)
         else:
+            self._is_done = False
+            self.reset_episode_steps()
             self.switch_to_matching_step()
             self.primary_target = primary_target
             self.semantic_id_to_label = semantic_id_to_label

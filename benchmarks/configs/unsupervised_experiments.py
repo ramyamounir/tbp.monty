@@ -10,26 +10,38 @@ import copy
 import os
 from dataclasses import asdict
 
-from benchmarks.configs.defaults import (default_evidence_lm_config,
-                                         min_eval_steps, pretrained_dir)
+from benchmarks.configs.defaults import (
+    default_evidence_lm_config,
+    min_eval_steps,
+    pretrained_dir,
+)
 from benchmarks.configs.names import UnsupervisedExperiments
 from tbp.monty.frameworks.config_utils.config_args import (
-    DetailedEvidenceLMLoggingConfig, MontyArgs,
+    DetailedEvidenceLMLoggingConfig,
+    MontyArgs,
     MotorSystemConfigCurInformedSurfaceGoalStateDriven,
-    ParallelEvidenceLMLoggingConfig, PatchAndViewSOTAMontyConfig,
-    SurfaceAndViewSOTAMontyConfig, get_cube_face_and_corner_views_rotations)
+    ParallelEvidenceLMLoggingConfig,
+    PatchAndViewSOTAMontyConfig,
+    SurfaceAndViewSOTAMontyConfig,
+    get_cube_face_and_corner_views_rotations,
+)
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
-    EnvironmentDataloaderPerObjectArgs, EvalExperimentArgs,
-    PredefinedObjectInitializer, get_env_dataloader_per_object_by_idx,
-    get_object_names_by_idx)
+    EnvironmentDataloaderPerObjectArgs,
+    EvalExperimentArgs,
+    PredefinedObjectInitializer,
+    get_env_dataloader_per_object_by_idx,
+    get_object_names_by_idx,
+)
 from tbp.monty.frameworks.environments import embodied_data as ED
 from tbp.monty.frameworks.environments.ycb import DISTINCT_OBJECTS
 from tbp.monty.frameworks.experiments import MontyObjectRecognitionExperiment
-from tbp.monty.frameworks.models.evidence_unsuperversed_matching import \
-    MontyForUnsupervisedEvidenceGraphMatching
+from tbp.monty.frameworks.models.evidence_unsuperversed_matching import (
+    MontyForUnsupervisedEvidenceGraphMatching,
+)
 from tbp.monty.simulators.habitat.configs import (
     PatchViewFinderMountHabitatDatasetArgs,
-    SurfaceViewFinderMountHabitatDatasetArgs)
+    SurfaceViewFinderMountHabitatDatasetArgs,
+)
 
 # Main parameters
 num_rotations = 1
@@ -68,16 +80,14 @@ unsupervised_distinctobj_surf_agent = dict(
         n_eval_epochs=len(test_rotations),
         max_total_steps=5000,
     ),
-    logging_config=ParallelEvidenceLMLoggingConfig(
-        wandb_group="unsupervised_experiments",
+    logging_config=DetailedEvidenceLMLoggingConfig(
         wandb_handlers=[],
-        # python_log_level="DEBUG",
     ),
     monty_config=SurfaceAndViewSOTAMontyConfig(
         monty_class=MontyForUnsupervisedEvidenceGraphMatching,
         learning_module_configs=lower_max_nneighbors_surf_1lm_config,
         motor_system_config=MotorSystemConfigCurInformedSurfaceGoalStateDriven(),
-        monty_args=MontyArgs(min_eval_steps=min_eval_steps),
+        monty_args=MontyArgs(min_eval_steps=min_eval_steps + 20),
     ),
     dataset_class=ED.EnvironmentDataset,
     dataset_args=SurfaceViewFinderMountHabitatDatasetArgs(),
@@ -103,9 +113,9 @@ unsupervised_distinctobj_dist_agent = dict(
         wandb_handlers=[],
     ),
     monty_config=PatchAndViewSOTAMontyConfig(
-        # monty_class=MontyForUnsupervisedEvidenceGraphMatching,
+        monty_class=MontyForUnsupervisedEvidenceGraphMatching,
         learning_module_configs=lower_max_nneighbors_dist_lm_config,
-        monty_args=MontyArgs(min_eval_steps=min_eval_steps),
+        monty_args=MontyArgs(min_eval_steps=min_eval_steps + 20),
     ),
     dataset_class=ED.EnvironmentDataset,
     dataset_args=PatchViewFinderMountHabitatDatasetArgs(),
