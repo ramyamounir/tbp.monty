@@ -20,7 +20,6 @@ from tbp.monty.frameworks.config_utils.config_args import (
     DetailedEvidenceLMLoggingConfig,
     MontyArgs,
     MotorSystemConfigCurInformedSurfaceGoalStateDriven,
-    ParallelEvidenceLMLoggingConfig,
     PatchAndViewSOTAMontyConfig,
     SurfaceAndViewSOTAMontyConfig,
     get_cube_face_and_corner_views_rotations,
@@ -35,8 +34,15 @@ from tbp.monty.frameworks.config_utils.make_dataset_configs import (
 from tbp.monty.frameworks.environments import embodied_data as ED
 from tbp.monty.frameworks.environments.ycb import DISTINCT_OBJECTS
 from tbp.monty.frameworks.experiments import MontyObjectRecognitionExperiment
+from tbp.monty.frameworks.loggers.monty_handlers import (
+    BasicCSVStatsHandler,
+    DetailedJSONHandler,
+    ReproduceEpisodeHandler,
+)
 from tbp.monty.frameworks.models.evidence_unsuperversed_matching import (
+    MaxEvidenceJSONHandler,
     MontyForUnsupervisedEvidenceGraphMatching,
+    UnuspervisedEvidenceGraphLM,
 )
 from tbp.monty.simulators.habitat.configs import (
     PatchViewFinderMountHabitatDatasetArgs,
@@ -46,6 +52,16 @@ from tbp.monty.simulators.habitat.configs import (
 # Main parameters
 num_rotations = 1
 num_objects = 2
+objects_list = ["strawberry", "banana"]
+
+initial_possible_poses = "informed"
+# initial_possible_poses = "uniform"
+
+use_multithreading = False
+# use_multithreading = True
+
+evidence_update_threshold = "x_percent_threshold"
+# evidence_update_threshold = "all"
 
 # define rotations
 test_rotations = get_cube_face_and_corner_views_rotations()[:num_rotations]
@@ -56,20 +72,28 @@ model_path_10distinctobj = os.path.join(
     "surf_agent_1lm_10distinctobj/pretrained/",
 )
 
-# define lm configs
+# define lm configs for surf agent
 lower_max_nneighbors_surf_lm_config = copy.deepcopy(default_evidence_lm_config)
+lower_max_nneighbors_surf_lm_config["learning_module_class"] = (
+    UnuspervisedEvidenceGraphLM
+)
+lower_max_nneighbors_surf_lm_config["learning_module_args"][
+    "evidence_update_threshold"
+] = evidence_update_threshold
 lower_max_nneighbors_surf_lm_config["learning_module_args"]["max_nneighbors"] = 5
 lower_max_nneighbors_surf_lm_config["learning_module_args"]["gsg_args"][
     "desired_object_distance"
 ] = 0.025
+lower_max_nneighbors_surf_lm_config["learning_module_args"]["use_multithreading"] = (
+    use_multithreading
+)
+lower_max_nneighbors_surf_lm_config["learning_module_args"][
+    "initial_possible_poses"
+] = initial_possible_poses
+
+initial_possible_poses
 lower_max_nneighbors_surf_1lm_config = dict(
     learning_module_0=lower_max_nneighbors_surf_lm_config
-)
-
-lower_max_nneighbors_dist_lm_config = copy.deepcopy(default_evidence_lm_config)
-lower_max_nneighbors_dist_lm_config["learning_module_args"]["max_nneighbors"] = 5
-lower_max_nneighbors_dist_lm_config = dict(
-    learning_module_0=lower_max_nneighbors_dist_lm_config
 )
 
 
@@ -78,16 +102,23 @@ unsupervised_distinctobj_surf_agent = dict(
     experiment_args=EvalExperimentArgs(
         model_name_or_path=model_path_10distinctobj,
         n_eval_epochs=len(test_rotations),
-        max_total_steps=5000,
+        # max_total_steps=5000,
+        max_eval_steps=100,
     ),
     logging_config=DetailedEvidenceLMLoggingConfig(
+        monty_handlers=[
+            BasicCSVStatsHandler,
+            MaxEvidenceJSONHandler,
+            ReproduceEpisodeHandler,
+        ],
         wandb_handlers=[],
+        # python_log_level="WARNING",
     ),
     monty_config=SurfaceAndViewSOTAMontyConfig(
         monty_class=MontyForUnsupervisedEvidenceGraphMatching,
         learning_module_configs=lower_max_nneighbors_surf_1lm_config,
         motor_system_config=MotorSystemConfigCurInformedSurfaceGoalStateDriven(),
-        monty_args=MontyArgs(min_eval_steps=min_eval_steps + 20),
+        monty_args=MontyArgs(min_eval_steps=min_eval_steps),
     ),
     dataset_class=ED.EnvironmentDataset,
     dataset_args=SurfaceViewFinderMountHabitatDatasetArgs(),
@@ -95,11 +126,29 @@ unsupervised_distinctobj_surf_agent = dict(
     train_dataloader_args=get_env_dataloader_per_object_by_idx(start=0, stop=10),
     eval_dataloader_class=ED.InformedEnvironmentDataLoader,
     eval_dataloader_args=EnvironmentDataloaderPerObjectArgs(
-        object_names=get_object_names_by_idx(
-            0, max(1, min(num_objects, 10)), object_list=DISTINCT_OBJECTS
-        ),
+        object_names=objects_list,
         object_init_sampler=PredefinedObjectInitializer(rotations=test_rotations),
     ),
+)
+
+
+# define lm configs for dist agent
+lower_max_nneighbors_dist_lm_config = copy.deepcopy(default_evidence_lm_config)
+# lower_max_nneighbors_dist_lm_config["learning_module_class"] = (
+#     UnuspervisedEvidenceGraphLM
+# )
+lower_max_nneighbors_dist_lm_config["learning_module_args"][
+    "evidence_update_threshold"
+] = evidence_update_threshold
+lower_max_nneighbors_dist_lm_config["learning_module_args"]["use_multithreading"] = (
+    use_multithreading
+)
+lower_max_nneighbors_dist_lm_config["learning_module_args"]["max_nneighbors"] = 5
+lower_max_nneighbors_dist_lm_config["learning_module_args"][
+    "initial_possible_poses"
+] = initial_possible_poses
+lower_max_nneighbors_dist_lm_config = dict(
+    learning_module_0=lower_max_nneighbors_dist_lm_config
 )
 
 
@@ -108,14 +157,22 @@ unsupervised_distinctobj_dist_agent = dict(
     experiment_args=EvalExperimentArgs(
         model_name_or_path=model_path_10distinctobj,
         n_eval_epochs=len(test_rotations),
+        # max_total_steps=5000,
+        # max_eval_steps=100,
     ),
     logging_config=DetailedEvidenceLMLoggingConfig(
+        # monty_handlers=[
+        #     BasicCSVStatsHandler,
+        #     MaxEvidenceJSONHandler,
+        #     ReproduceEpisodeHandler,
+        # ],
         wandb_handlers=[],
+        # python_log_level="WARNING",
     ),
     monty_config=PatchAndViewSOTAMontyConfig(
-        monty_class=MontyForUnsupervisedEvidenceGraphMatching,
+        # monty_class=MontyForUnsupervisedEvidenceGraphMatching,
         learning_module_configs=lower_max_nneighbors_dist_lm_config,
-        monty_args=MontyArgs(min_eval_steps=min_eval_steps + 20),
+        monty_args=MontyArgs(min_eval_steps=min_eval_steps),
     ),
     dataset_class=ED.EnvironmentDataset,
     dataset_args=PatchViewFinderMountHabitatDatasetArgs(),
@@ -123,9 +180,7 @@ unsupervised_distinctobj_dist_agent = dict(
     train_dataloader_args=get_env_dataloader_per_object_by_idx(start=0, stop=10),
     eval_dataloader_class=ED.InformedEnvironmentDataLoader,
     eval_dataloader_args=EnvironmentDataloaderPerObjectArgs(
-        object_names=get_object_names_by_idx(
-            0, max(1, min(num_objects, 10)), object_list=DISTINCT_OBJECTS
-        ),
+        object_names=objects_list,
         object_init_sampler=PredefinedObjectInitializer(rotations=test_rotations),
     ),
 )
