@@ -134,9 +134,9 @@ unsupervised_distinctobj_surf_agent = dict(
 
 # define lm configs for dist agent
 lower_max_nneighbors_dist_lm_config = copy.deepcopy(default_evidence_lm_config)
-# lower_max_nneighbors_dist_lm_config["learning_module_class"] = (
-#     UnuspervisedEvidenceGraphLM
-# )
+lower_max_nneighbors_dist_lm_config["learning_module_class"] = (
+    UnuspervisedEvidenceGraphLM
+)
 lower_max_nneighbors_dist_lm_config["learning_module_args"][
     "evidence_update_threshold"
 ] = evidence_update_threshold
@@ -170,7 +170,7 @@ unsupervised_distinctobj_dist_agent = dict(
         # python_log_level="WARNING",
     ),
     monty_config=PatchAndViewSOTAMontyConfig(
-        # monty_class=MontyForUnsupervisedEvidenceGraphMatching,
+        monty_class=MontyForUnsupervisedEvidenceGraphMatching,
         learning_module_configs=lower_max_nneighbors_dist_lm_config,
         monty_args=MontyArgs(min_eval_steps=min_eval_steps),
     ),

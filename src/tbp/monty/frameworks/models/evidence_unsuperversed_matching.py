@@ -15,6 +15,7 @@ import os
 import time
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 from tbp.monty.frameworks.loggers.monty_handlers import DetailedJSONHandler
 from tbp.monty.frameworks.models.buffer import BufferEncoder
@@ -45,7 +46,6 @@ class MontyForUnsupervisedEvidenceGraphMatching(MontyForEvidenceGraphMatching):
         self.semantic_id_to_label = semantic_id_to_label
 
         for lm in self.learning_modules:
-            lm.possible_location = []
             lm.primary_target = primary_target["object"]
             lm.primary_target_rotation_quat = primary_target["quat_rotation"]
 
@@ -111,6 +111,28 @@ class UnuspervisedEvidenceGraphLM(EvidenceGraphLM):
             new_num_hypotheses,
         ]
         self.channel_hypothesis_mapping[graph_id]["num_hypotheses"] = new_num_hypotheses
+
+    def _add_detailed_stats(self, stats, get_rotations):
+        stats = super()._add_detailed_stats(stats, get_rotations)
+        stats["th_limit"] = self._calculate_theoretical_limit()
+        return stats
+
+    def _calculate_theoretical_limit(self):
+        poses = self.possible_poses[self.primary_target].copy()
+        hyp_rotations = Rotation.from_matrix(poses).inv().as_quat().tolist()
+        limit = self.get_pose_error(hyp_rotations, self.primary_target_rotation_quat)
+        return limit
+
+    def get_pose_error(self, detected_pose, target_pose):
+        target_r = Rotation.from_quat(target_pose)
+        min_error = np.pi
+        for det_r in detected_pose:
+            detected_r = Rotation.from_quat(det_r)
+            difference = detected_r * target_r.inv()
+            error = difference.magnitude()
+            if error < min_error:
+                min_error = error
+        return min_error
 
 
 class MaxEvidenceJSONHandler(DetailedJSONHandler):
