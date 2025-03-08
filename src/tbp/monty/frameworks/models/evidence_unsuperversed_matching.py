@@ -115,6 +115,7 @@ class UnuspervisedEvidenceGraphLM(EvidenceGraphLM):
     def _add_detailed_stats(self, stats, get_rotations):
         stats = super()._add_detailed_stats(stats, get_rotations)
         stats["th_limit"] = self._calculate_theoretical_limit()
+        stats["mlh_error"] = self._get_pose_error_mlh()
         return stats
 
     def _calculate_theoretical_limit(self):
@@ -122,6 +123,11 @@ class UnuspervisedEvidenceGraphLM(EvidenceGraphLM):
         hyp_rotations = Rotation.from_matrix(poses).inv().as_quat().tolist()
         limit = self.get_pose_error(hyp_rotations, self.primary_target_rotation_quat)
         return limit
+
+    def _get_pose_error_mlh(self):
+        target_rot = Rotation.from_quat(self.primary_target_rotation_quat)
+        difference = self.current_mlh["rotation"] * target_rot.inv()
+        return difference.magnitude()
 
     def get_pose_error(self, detected_pose, target_pose):
         target_r = Rotation.from_quat(target_pose)
@@ -151,12 +157,21 @@ class MaxEvidenceJSONHandler(DetailedJSONHandler):
             total = kwargs["eval_episodes_to_total"][episode]
             stats = data["BASIC"]["eval_stats"][episode]
 
+        # new filtered dictionary to save
+        lm_data = {}
+
+        # extract max evidence instead of all evidences
         max_evidences = self.extract_max_evidences(
             data["DETAILED"][total]["LM_0"]["evidences"]
         )
-        # data["DETAILED"][total]["LM_0"]["evidences"] = max_evidences
+        lm_data["evidences"] = max_evidences
+        lm_data["target"] = data["DETAILED"][total]["LM_0"]["target"]
+        lm_data["th_limit"] = data["DETAILED"][total]["LM_0"]["th_limit"]
+        lm_data["current_mlh"] = data["DETAILED"][total]["LM_0"]["current_mlh"]
+        lm_data["mlh_error"] = data["DETAILED"][total]["LM_0"]["mlh_error"]
+
         data["DETAILED"][total] = {"LM_0": {}}
-        data["DETAILED"][total]["LM_0"] = {"evidences": max_evidences}
+        data["DETAILED"][total]["LM_0"] = lm_data
 
         output_data[total] = copy.deepcopy(stats)
         output_data[total].update(data["DETAILED"][total])

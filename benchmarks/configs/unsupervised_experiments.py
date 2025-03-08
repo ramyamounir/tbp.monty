@@ -161,11 +161,11 @@ unsupervised_distinctobj_dist_agent = dict(
         # max_eval_steps=100,
     ),
     logging_config=DetailedEvidenceLMLoggingConfig(
-        # monty_handlers=[
-        #     BasicCSVStatsHandler,
-        #     MaxEvidenceJSONHandler,
-        #     ReproduceEpisodeHandler,
-        # ],
+        monty_handlers=[
+            BasicCSVStatsHandler,
+            MaxEvidenceJSONHandler,
+            ReproduceEpisodeHandler,
+        ],
         wandb_handlers=[],
         # python_log_level="WARNING",
     ),
