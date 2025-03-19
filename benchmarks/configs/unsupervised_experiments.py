@@ -29,14 +29,11 @@ from tbp.monty.frameworks.config_utils.make_dataset_configs import (
     EvalExperimentArgs,
     PredefinedObjectInitializer,
     get_env_dataloader_per_object_by_idx,
-    get_object_names_by_idx,
 )
 from tbp.monty.frameworks.environments import embodied_data as ED
-from tbp.monty.frameworks.environments.ycb import DISTINCT_OBJECTS
 from tbp.monty.frameworks.experiments import MontyObjectRecognitionExperiment
 from tbp.monty.frameworks.loggers.monty_handlers import (
     BasicCSVStatsHandler,
-    DetailedJSONHandler,
     ReproduceEpisodeHandler,
 )
 from tbp.monty.frameworks.models.evidence_unsuperversed_matching import (

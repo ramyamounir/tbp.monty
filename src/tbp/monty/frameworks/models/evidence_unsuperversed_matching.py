@@ -14,6 +14,8 @@ import logging
 import os
 import time
 from collections import OrderedDict
+from typing import Dict, List, Optional, Tuple
+from typing import OrderedDict as OrderedDictType
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -25,6 +27,162 @@ from tbp.monty.frameworks.models.evidence_matching import (
     MontyForEvidenceGraphMatching,
 )
 from tbp.monty.frameworks.utils.logging_utils import maybe_rename_existing_file
+
+
+class ChannelMapper:
+    """Marks the range of hypotheses that correspond to each input channel.
+
+    The `EvidenceGraphLM` implementation stacks the hypotheses from all input channels
+    in the same array to perform efficient vector operations on them. Therefore, we
+    need to keep track of which indices in the stacked array correspond to which input
+    channel. This class stores only the sizes of the input channels in an ordered data
+    structure (OrderedDict), and computes the range of indices for each channel. Storing
+    the sizes of channels in an ordered dictionary allows us to insert or remove
+    channels, as well as dynamically resize them.
+
+    """
+
+    def __init__(self, channel_sizes: Optional[Dict[str, int]] = None) -> None:
+        """Initializes the ChannelMapper with an ordered dictionary of channel sizes.
+
+        Args:
+            channel_sizes (Optional[Dict[str, int]]): Dictionary of {channel_name: size}
+        """
+        self.channel_sizes: OrderedDictType[str, int] = (
+            OrderedDict(channel_sizes) if channel_sizes else OrderedDict()
+        )
+
+    @property
+    def channels(self) -> List[str]:
+        """Returns the existing channel names.
+
+        Returns:
+            List[str]: List of channel names.
+        """
+        return list(self.channel_sizes.keys())
+
+    @property
+    def dict(self) -> OrderedDictType[str, int]:
+        """Returns the ordered dictionary of channel sizes.
+
+        Returns:
+            OrderedDict[str, int]: Ordered dictionary mapping channel names to sizes.
+        """
+        return self.channel_sizes
+
+    @property
+    def total_size(self) -> int:
+        """Returns the total number of hypotheses across all channels.
+
+        Returns:
+            int: Total size across all channels.
+        """
+        return sum(self.channel_sizes.values())
+
+    def channel_range(self, channel_name: str) -> Tuple[int, int]:
+        """Returns the start and end indices of the given channel.
+
+        Args:
+            channel_name (str): The name of the channel.
+
+        Returns:
+            Tuple[int, int]: The start and end indices of the channel.
+
+        Raises:
+            ValueError: If the channel is not found.
+        """
+        if channel_name not in self.channel_sizes:
+            raise ValueError(f"Channel '{channel_name}' not found.")
+
+        start = 0
+        for name, size in self.channel_sizes.items():
+            if name == channel_name:
+                return (start, start + size)
+            start += size
+
+    def resize_channel_by(self, channel_name: str, value: int) -> None:
+        """Resizes the channel by a specific amount.
+
+        Args:
+            channel_name (str): The name of the channel.
+            value (int): The value used to modify the channel size.
+
+        Raises:
+            ValueError: If the channel is not found or the requested size is negative.
+        """
+        if channel_name not in self.channel_sizes:
+            raise ValueError(f"Channel '{channel_name}' not found.")
+        if self.channel_sizes[channel_name] + value <= 0:
+            raise ValueError(
+                f"Channel '{channel_name}' size cannot be negative or zero."
+            )
+        self.channel_sizes[channel_name] += value
+
+    def resize_channel(self, channel_name: str, value: int) -> None:
+        """Resizes the channel to a specific amount.
+
+        Args:
+            channel_name (str): The name of the channel.
+            value (int): The value to set the channel size.
+
+        Raises:
+            ValueError: If the channel is not found or the requested size is negative.
+        """
+        if channel_name not in self.channel_sizes:
+            raise ValueError(f"Channel '{channel_name}' not found.")
+        if value <= 0:
+            raise ValueError(
+                f"Channel '{channel_name}' size cannot be negative or zero."
+            )
+        self.channel_sizes[channel_name] = value
+
+    def add_channel(
+        self, channel_name: str, size: int, position: Optional[int] = None
+    ) -> None:
+        """Adds a new channel at a specified position (default is at the end).
+
+        Args:
+            channel_name (str): The name of the new channel.
+            size (int): The size of the new channel.
+            position (Optional[int]): The index at which to insert the channel.
+
+        Raises:
+            ValueError: If the channel already exists or position is out of bounds.
+        """
+        if channel_name in self.channel_sizes:
+            raise ValueError(f"Channel '{channel_name}' already exists.")
+
+        if type(position) == int and position >= len(self.channel_sizes):
+            raise ValueError(f"Position index '{position}' is out of bounds.")
+
+        if position is None:
+            self.channel_sizes[channel_name] = size
+        else:
+            items = list(self.channel_sizes.items())
+            items.insert(position, (channel_name, size))
+            self.channel_sizes = OrderedDict(items)
+
+    def remove_channel(self, channel_name: str) -> None:
+        """Removes a channel from the mapping.
+
+        Args:
+            channel_name (str): The name of the channel to remove.
+
+        Raises:
+            ValueError: If the channel is not found.
+        """
+        if channel_name not in self.channel_sizes:
+            raise ValueError(f"Channel '{channel_name}' not found.")
+        del self.channel_sizes[channel_name]
+
+    def __repr__(self) -> str:
+        """Returns a string representation of the current channel mapping.
+
+        Returns:
+            str: String representation of the channel mappings.
+        """
+        ranges = {ch: self.channel_range(ch) for ch in self.channel_sizes}
+        return f"ChannelMapper({ranges})"
 
 
 class MontyForUnsupervisedEvidenceGraphMatching(MontyForEvidenceGraphMatching):
@@ -51,91 +209,13 @@ class MontyForUnsupervisedEvidenceGraphMatching(MontyForEvidenceGraphMatching):
     #         lm.primary_target_rotation_quat = primary_target["quat_rotation"]
 
 
-class ChannelMapper:
-    def __init__(self, channel_sizes=None):
-        """
-        Initialize the ChannelMapper with an ordered dictionary of channel sizes.
-        :param channel_sizes: Dict of {channel_name: size}, maintaining order.
-        """
-        self.channel_sizes = (
-            OrderedDict(channel_sizes) if channel_sizes else OrderedDict()
-        )
-
-    @property
-    def channels(self):
-        return list(self.channel_sizes.keys())
-
-    @property
-    def dict(self):
-        return self.channel_sizes
-
-    @property
-    def total_size(self):
-        """Returns the total number of elements across all channels."""
-        return sum(self.channel_sizes.values())
-
-    def get_channel_range(self, channel_name):
-        """Returns the start and end indices of the given channel."""
-        if channel_name not in self.channel_sizes:
-            raise ValueError(f"Channel '{channel_name}' not found.")
-
-        start = 0
-        for name, size in self.channel_sizes.items():
-            if name == channel_name:
-                return (start, start + size - 1)
-            start += size
-
-    def increase_channel_size(self, channel_name, value):
-        """Increases the size of the specified channel."""
-        if channel_name not in self.channel_sizes:
-            raise ValueError(f"Channel '{channel_name}' not found.")
-        if self.channel_sizes[channel_name] + value <= 0:
-            raise ValueError(
-                f"Channel '{channel_name}' size cannot be negative or zero."
-            )
-        self.channel_sizes[channel_name] += value
-
-    def set_channel_size(self, channel_name, value):
-        """Increases the size of the specified channel."""
-        if channel_name not in self.channel_sizes:
-            raise ValueError(f"Channel '{channel_name}' not found.")
-        if self.channel_sizes[channel_name] <= 0:
-            raise ValueError(
-                f"Channel '{channel_name}' size cannot be negative or zero."
-            )
-        self.channel_sizes[channel_name] = value
-
-    def add_channel(self, channel_name, size, position=None):
-        """Adds a new channel at a specified position (default is at the end)."""
-        if channel_name in self.channel_sizes:
-            raise ValueError(f"Channel '{channel_name}' already exists.")
-
-        if position is None or position >= len(self.channel_sizes):
-            self.channel_sizes[channel_name] = size
-        else:
-            items = list(self.channel_sizes.items())
-            items.insert(position, (channel_name, size))
-            self.channel_sizes = OrderedDict(items)
-
-    def remove_channel(self, channel_name):
-        """Removes a channel from the mapping."""
-        if channel_name not in self.channel_sizes:
-            raise ValueError(f"Channel '{channel_name}' not found.")
-        del self.channel_sizes[channel_name]
-
-    def __repr__(self):
-        """Returns a string representation of the current channel mapping with computed ranges."""
-        ranges = {ch: self.get_channel_range(ch) for ch in self.channel_sizes}
-        return f"ChannelMapper({ranges})"
-
-
 class UnuspervisedEvidenceGraphLM(EvidenceGraphLM):
     def reset(self):
         super().reset()
         # return
 
-        self.evidence = {}
         self.channel_hypothesis_mapping = {}
+        self.evidence = {}
 
     def _update_evidence(self, features, displacements, graph_id):
         # super()._update_evidence(features, displacements, graph_id)
@@ -143,17 +223,23 @@ class UnuspervisedEvidenceGraphLM(EvidenceGraphLM):
 
         start_time = time.time()
 
-        # get all usable input channels
-        input_channels_to_use = [
-            ic
-            for ic in list(features.keys())
-            if ic in self.get_input_channels_in_graph(graph_id)
-        ]
-
         if graph_id not in self.channel_hypothesis_mapping:
             self.channel_hypothesis_mapping[graph_id] = ChannelMapper()
 
-        # Loop over the input channels.
+        # get all usable input channels
+        input_channels_to_use = [
+            ic
+            for ic in features.keys()
+            if ic in self.get_input_channels_in_graph(graph_id)
+        ]
+
+        if displacements is None and len(input_channels_to_use) == 0:
+            # QUESTION: Do we just want to continue until we get input?
+            raise ValueError(
+                "No input channels found to initializing hypotheses. Make sure"
+                " there is at least one channel that is also stored in the graph."
+            )
+
         for input_channel in input_channels_to_use:
             # If the channel doesn't exist, initialize it and add it.
             if input_channel not in self.channel_hypothesis_mapping[graph_id].channels:
@@ -173,14 +259,14 @@ class UnuspervisedEvidenceGraphLM(EvidenceGraphLM):
                     new_evidence=channel_evidence,
                 )
 
-            # If the channel exists update its evidence
+            # If the channel exists, update its evidence
             else:
                 # Get the observed displacement for this channel
                 displacement = displacements[input_channel]
                 # Get the IDs in hypothesis space for this channel
                 channel_start, channel_end = self.channel_hypothesis_mapping[
                     graph_id
-                ].get_channel_range(input_channel)
+                ].channel_range(input_channel)
 
                 # Have to do this for all hypotheses so we don't loose the path
                 # information
@@ -264,18 +350,8 @@ class UnuspervisedEvidenceGraphLM(EvidenceGraphLM):
         # )
         # return
 
-        """Add new hypotheses to hypothesis space."""
-        # Add current mean evidence to give the new hypotheses a fighting
-        # chance. TODO H: Test mean vs. median here.
-
-        if graph_id not in self.evidence.keys():
-            self.possible_locations[graph_id] = new_loc_hypotheses
-            self.possible_poses[graph_id] = new_rot_hypotheses
-            self.evidence[graph_id] = new_evidence
-
-        else:
-            current_mean_evidence = np.mean(self.evidence[graph_id])
-            new_evidence = new_evidence + current_mean_evidence
+        if graph_id in self.evidence.keys():
+            new_evidence += np.mean(self.evidence[graph_id])
             self.possible_locations[graph_id] = np.vstack(
                 [
                     self.possible_locations[graph_id],
@@ -290,9 +366,18 @@ class UnuspervisedEvidenceGraphLM(EvidenceGraphLM):
             )
             self.evidence[graph_id] = np.hstack([self.evidence[graph_id], new_evidence])
 
-        self.channel_hypothesis_mapping[graph_id].add_channel(
-            input_channel, len(new_loc_hypotheses)
-        )
+            self.channel_hypothesis_mapping[graph_id].resize_channel_by(
+                input_channel, len(new_evidence)
+            )
+
+        else:
+            self.possible_locations[graph_id] = np.array(new_loc_hypotheses)
+            self.possible_poses[graph_id] = np.array(new_rot_hypotheses)
+            self.evidence[graph_id] = np.array(new_evidence * self.present_weight)
+
+            self.channel_hypothesis_mapping[graph_id].add_channel(
+                input_channel, len(new_evidence)
+            )
 
     def _add_detailed_stats(self, stats, get_rotations):
         stats = super()._add_detailed_stats(stats, get_rotations)
