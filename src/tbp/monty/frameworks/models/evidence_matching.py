@@ -1601,14 +1601,14 @@ class EvidenceGraphLM(GraphLM):
             possible_s_d[1][1:] = possible_s_d[1][1:] * -1
         else:
             # TODO: whats a reasonable number here?
-            # Maybe just samle n poses regardless of if pc1==pc2 and increase
+            # Maybe just sample n poses regardless of if pc1==pc2 and increase
             # evidence in the cases where we are more sure?
             # Maybe keep moving until pc1!= pc2 and then start matching?
             possible_s_d = get_more_directions_in_plane(sensed_directions, 8)
 
         for s_d in possible_s_d:
             # Since we have orthonormal vectors and know their correspondence we can
-            # directly calculate the rotation instead of using the Kabsch esimate
+            # directly calculate the rotation instead of using the Kabsch estimate
             # used in Rotation.align_vectors
             r = align_multiple_orthonormal_vectors(node_directions, s_d, as_scipy=False)
             all_possible_locations = np.vstack(
