@@ -17,33 +17,22 @@ import numpy as np
 from scipy.spatial import KDTree
 from scipy.spatial.transform import Rotation
 
-from tbp.monty.frameworks.models.goal_state_generation import EvidenceGoalStateGenerator
-from tbp.monty.frameworks.models.graph_matching import (
-    GraphLM,
-    GraphMemory,
-    MontyForGraphMatching,
-)
-from tbp.monty.frameworks.models.object_model import (
-    GraphObjectModel,
-    GridObjectModel,
-    GridTooSmallError,
-)
+from tbp.monty.frameworks.models.goal_state_generation import \
+    EvidenceGoalStateGenerator
+from tbp.monty.frameworks.models.graph_matching import (GraphLM, GraphMemory,
+                                                        MontyForGraphMatching)
+from tbp.monty.frameworks.models.object_model import (GraphObjectModel,
+                                                      GridObjectModel,
+                                                      GridTooSmallError)
 from tbp.monty.frameworks.models.states import State
 from tbp.monty.frameworks.utils.evidence_matching import ChannelMapper
 from tbp.monty.frameworks.utils.graph_matching_utils import (
-    add_pose_features_to_tolerances,
-    get_custom_distances,
-    get_initial_possible_poses,
-    get_relevant_curvature,
-    get_scaled_evidences,
-)
+    add_pose_features_to_tolerances, get_custom_distances,
+    get_initial_possible_poses, get_relevant_curvature, get_scaled_evidences)
 from tbp.monty.frameworks.utils.spatial_arithmetics import (
-    align_multiple_orthonormal_vectors,
-    align_orthonormal_vectors,
-    get_angles_for_all_hypotheses,
-    get_more_directions_in_plane,
-    rotate_pose_dependent_features,
-)
+    align_multiple_orthonormal_vectors, align_orthonormal_vectors,
+    get_angles_for_all_hypotheses, get_more_directions_in_plane,
+    rotate_pose_dependent_features)
 
 
 class MontyForEvidenceGraphMatching(MontyForGraphMatching):
@@ -911,11 +900,13 @@ class EvidenceGraphLM(GraphLM):
                 # Since the updates of different objects are independent of
                 # each other we can do this.
                 t = threading.Thread(
+                    # target=self._update_evidence_with_resample,
                     target=self._update_evidence,
                     args=(query[0], query[1], graph_id),
                 )
                 thread_list.append(t)
             else:  # This can be useful for debugging.
+                # self._update_evidence_with_resample(query[0], query[1], graph_id)
                 self._update_evidence(query[0], query[1], graph_id)
         if self.use_multithreading:
             # TODO: deal with keyboard interrupt
@@ -930,6 +921,153 @@ class EvidenceGraphLM(GraphLM):
         # Call this update in the step method?
         self.possible_matches = self._threshold_possible_matches()
         self.current_mlh = self._calculate_most_likely_hypothesis()
+
+    ### === Resampling Hypotheses Functions === #
+    def _sample_count(self, input_channel, features, graph_id):
+        """Returns the number of needed hypotheses."""
+        graph_num_points = self.graph_memory.get_locations_in_graph(
+            graph_id, input_channel
+        ).shape[0]
+
+        full_informed_count = (
+            graph_num_points * 2
+            if features["patch"]["pose_fully_defined"]
+            else graph_num_points * 8
+        )
+
+        if input_channel not in self.channel_hypothesis_mapping[graph_id].channels:
+            return 0, full_informed_count, 0
+
+        ### Update Evidence Slope Here!!
+
+        current = self.channel_hypothesis_mapping[graph_id][
+            input_channel
+        ]  # current number of hypotheses
+        hypotheses_count_multiplier = 1.0
+        hypotheses_old_to_new_ratio = 0.0
+        hypotheses_informed_to_offspring_ratio = 1.0
+
+        # calculate the total number of hypotheses needed
+        needed = current * hypotheses_count_multiplier
+
+        # calculate how many old and new hypotheses needed
+        old_maintained, new_sampled = (
+            needed * (1 - hypotheses_old_to_new_ratio),
+            needed * hypotheses_old_to_new_ratio,
+        )
+        # needed old hypotheses should not exceed the existing hypotheses
+        # if trying to maintain more hypotheses, set the available count as ceiling
+        if old_maintained > current:
+            old_maintained = current
+            new_sampled = needed - current
+
+        # calculate how many informed and offspring hypotheses needed
+        new_informed, new_offspring = (
+            new_sampled * (1 - hypotheses_informed_to_offspring_ratio),
+            new_sampled * hypotheses_informed_to_offspring_ratio,
+        )
+        # needed informed hypotheses should not exceed the available informed hypotheses
+        # if trying to sample more hypotheses, set the available count as ceiling
+        if new_informed > full_informed_count:
+            new_informed = full_informed_count
+            new_offspring = new_sampled - full_informed_count
+
+        return (
+            int(old_maintained),
+            int(new_informed),
+            int(new_offspring),
+        )
+
+    def _sample_informed(self, features, graph_id, informed_count, input_channel):
+        """Samples new hypotheses from the graph."""
+        (
+            initial_possible_channel_locations,
+            initial_possible_channel_rotations,
+            channel_evidence,
+        ) = self._get_initial_hypothesis_space(features, graph_id, input_channel)
+
+        # Get the indices of the top `informed_count` values in `channel_evidence`
+        top_indices = np.argsort(channel_evidence)[-informed_count:]  # Get top indices
+
+        # Select the corresponding entries from the original arrays
+        selected_locations = initial_possible_channel_locations[top_indices]
+        selected_rotations = initial_possible_channel_rotations[top_indices]
+        selected_evidence = channel_evidence[top_indices]
+
+        # return selected_locations, selected_rotations, selected_evidence
+
+    def _sample_old(self, features, graph_id, old_count, input_channel):
+        """Samples old hypotheses from the graph."""
+        selected_locations = np.zeros((0, 3))
+        selected_rotations = np.zeros((0, 3, 3))
+        selected_evidence = np.zeros((0))
+        # return selected_locations, selected_rotations, selected_evidence
+
+    def _sample_offspring(self, features, graph_id, old_count, input_channel):
+        """Samples old hypotheses from the graph."""
+        selected_locations = np.zeros((0, 3))
+        selected_rotations = np.zeros((0, 3, 3))
+        selected_evidence = np.zeros((0))
+        # return selected_locations, selected_rotations, selected_evidence
+
+    def _update_evidence_with_resample(self, features, displacements, graph_id):
+        """Resamples hypotheses and updates existing evidence.
+
+        Raises:
+            ValueError: If no input channels are found to initializing hypotheses
+        """
+        start_time = time.time()
+
+        if graph_id not in self.channel_hypothesis_mapping:
+            self.channel_hypothesis_mapping[graph_id] = ChannelMapper()
+
+        # get all usable input channels
+        input_channels_to_use = [
+            ic
+            for ic in features.keys()
+            if ic in self.get_input_channels_in_graph(graph_id)
+        ]
+
+        if displacements is None and len(input_channels_to_use) == 0:
+            # QUESTION: Do we just want to continue until we get input?
+            raise ValueError(
+                "No input channels found to initializing hypotheses. Make sure"
+                " there is at least one channel that is also stored in the graph."
+            )
+
+        for input_channel in input_channels_to_use:
+            # get sample counts
+            old_count, informed_count, offspring_count = self._sample_count(
+                input_channel, features, graph_id
+            )
+
+            # do the sampling
+            informed_locations, informed_rotations, informed_evidence = (
+                self._sample_informed(features, graph_id, informed_count, input_channel)
+            )
+            old_locations, old_rotations, old_evidence = self._sample_old(
+                features, graph_id, old_count, input_channel
+            )
+            offspring_locations, offspring_rotations, offspring_evidence = (
+                self._sample_offspring(
+                    features, graph_id, offspring_count, input_channel
+                )
+            )
+
+            # displace and update hypotheses
+            old_offspring_locations = np.vstack(old_locations, offspring_locations)
+            old_offspring_rotations = np.vstack(old_rotations, offspring_rotations)
+            old_offspring_evidence = np.hstack(old_evidence, offspring_evidence)
+
+        end_time = time.time()
+        assert not np.isnan(np.max(self.evidence[graph_id])), "evidence contains NaN."
+        logging.debug(
+            f"evidence update for {graph_id} took "
+            f"{np.round(end_time - start_time,2)} seconds."
+            f" New max evidence: {np.round(np.max(self.evidence[graph_id]),3)}"
+        )
+
+    ### === End Resampling Hypotheses Functions === #
 
     def _update_evidence(self, features, displacements, graph_id):
         """Update evidence for poses of graph_id.
