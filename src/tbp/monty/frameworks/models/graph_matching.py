@@ -21,10 +21,7 @@ from tbp.monty.frameworks.loggers.graph_matching_loggers import (
     DetailedGraphMatchingLogger,
     SelectiveEvidenceLogger,
 )
-from tbp.monty.frameworks.models.abstract_monty_classes import (
-    LearningModule,
-    LMMemory,
-)
+from tbp.monty.frameworks.models.abstract_monty_classes import LearningModule, LMMemory
 from tbp.monty.frameworks.models.buffer import FeatureAtLocationBuffer
 from tbp.monty.frameworks.models.goal_state_generation import GraphGoalStateGenerator
 from tbp.monty.frameworks.models.monty_base import MontyBase
@@ -649,14 +646,7 @@ class GraphLM(LearningModule):
         self.buffer.append(buffer_data)
         self.buffer.append_input_states(observations)
 
-        if len(self.buffer) > 1:
-            not_moved = False
-            logging.debug("performing matching step.")
-        else:
-            not_moved = True
-            logging.debug("we have not moved yet.")
-
-        self._compute_possible_matches(observations, not_moved=not_moved)
+        self._compute_possible_matches(observations)
 
         if len(self.get_possible_matches()) == 0:
             self.set_individual_ts(terminal_state="no_match")
@@ -988,23 +978,16 @@ class GraphLM(LearningModule):
     # ======================= Private ==========================
 
     # ------------------- Main Algorithm -----------------------
-    def _compute_possible_matches(self, observations, not_moved=False):
+    def _compute_possible_matches(self, observations):
         """Use graph memory to get the current possible matches.
 
         Args:
             observations: Observations to use for computing possible matches.
-            not_moved: Whether the observations are not moved.
         """
-        if not_moved:
-            query = [
-                self._select_features_to_use(observations),
-                None,
-            ]
-        else:
-            query = [
-                self._select_features_to_use(observations),
-                self.buffer.get_current_displacement(input_channel="all"),
-            ]
+        query = [
+            self._select_features_to_use(observations),
+            self.buffer.get_current_displacement(input_channel="all"),
+        ]
 
         logging.debug(f"query: {query}")
 

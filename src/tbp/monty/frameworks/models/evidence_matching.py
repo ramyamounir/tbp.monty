@@ -367,6 +367,7 @@ class EvidenceGraphLM(GraphLM):
         self.symmetry_evidence = 0
         self.last_possible_hypotheses = None
         self.channel_hypothesis_mapping = {}
+        self.evidence = {}
 
         self.current_mlh["graph_id"] = "no_observations_yet"
         self.current_mlh["location"] = [0, 0, 0]
@@ -940,7 +941,7 @@ class EvidenceGraphLM(GraphLM):
                 # pull the observation class into the LM we could add this (TODO S).
                 input_channels_to_use.append(input_channel)
         # Before moving we initialize the hypothesis space:
-        if displacements is None:
+        if graph_id not in self.evidence:
             if len(input_channels_to_use) == 0:
                 # QUESTION: Do we just want to continue until we get input?
                 raise ValueError(
