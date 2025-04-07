@@ -17,22 +17,33 @@ import numpy as np
 from scipy.spatial import KDTree
 from scipy.spatial.transform import Rotation
 
-from tbp.monty.frameworks.models.goal_state_generation import \
-    EvidenceGoalStateGenerator
-from tbp.monty.frameworks.models.graph_matching import (GraphLM, GraphMemory,
-                                                        MontyForGraphMatching)
-from tbp.monty.frameworks.models.object_model import (GraphObjectModel,
-                                                      GridObjectModel,
-                                                      GridTooSmallError)
+from tbp.monty.frameworks.models.goal_state_generation import EvidenceGoalStateGenerator
+from tbp.monty.frameworks.models.graph_matching import (
+    GraphLM,
+    GraphMemory,
+    MontyForGraphMatching,
+)
+from tbp.monty.frameworks.models.object_model import (
+    GraphObjectModel,
+    GridObjectModel,
+    GridTooSmallError,
+)
 from tbp.monty.frameworks.models.states import State
 from tbp.monty.frameworks.utils.evidence_matching import ChannelMapper
 from tbp.monty.frameworks.utils.graph_matching_utils import (
-    add_pose_features_to_tolerances, get_custom_distances,
-    get_initial_possible_poses, get_relevant_curvature, get_scaled_evidences)
+    add_pose_features_to_tolerances,
+    get_custom_distances,
+    get_initial_possible_poses,
+    get_relevant_curvature,
+    get_scaled_evidences,
+)
 from tbp.monty.frameworks.utils.spatial_arithmetics import (
-    align_multiple_orthonormal_vectors, align_orthonormal_vectors,
-    get_angles_for_all_hypotheses, get_more_directions_in_plane,
-    rotate_pose_dependent_features)
+    align_multiple_orthonormal_vectors,
+    align_orthonormal_vectors,
+    get_angles_for_all_hypotheses,
+    get_more_directions_in_plane,
+    rotate_pose_dependent_features,
+)
 
 
 class MontyForEvidenceGraphMatching(MontyForGraphMatching):

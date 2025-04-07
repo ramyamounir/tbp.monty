@@ -8,9 +8,10 @@
 # https://opensource.org/licenses/MIT.
 
 from collections import OrderedDict
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 from typing import OrderedDict as OrderedDictType
-from typing import Tuple
+
+import numpy as np
 
 
 class ChannelMapper:
