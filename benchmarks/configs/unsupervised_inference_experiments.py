@@ -151,7 +151,7 @@ USE_MULTITHREADING = True
 EVAL_STEPS = 50
 
 # Controls whether to output detailed logs
-DETAILED_LOG = False
+DETAILED_LOG = True
 
 # === End Rapid Prototyping Configs === #
 
