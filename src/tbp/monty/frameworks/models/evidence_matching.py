@@ -845,7 +845,7 @@ class EvidenceGraphLM(GraphLM):
         new_loc_hypotheses,
         new_rot_hypotheses,
         new_evidence,
-        add_evidence_mean=True,
+        add_evidence_mean=False,
     ):
         """Add new hypotheses to hypothesis space.
 
@@ -898,14 +898,14 @@ class EvidenceGraphLM(GraphLM):
                 # Since the updates of different objects are independent of
                 # each other we can do this.
                 t = threading.Thread(
-                    # target=self._update_evidence_with_resample,
-                    target=self._update_evidence,
+                    target=self._update_evidence_with_resample,
+                    # target=self._update_evidence,
                     args=(query[0], query[1], graph_id),
                 )
                 thread_list.append(t)
             else:  # This can be useful for debugging.
-                # self._update_evidence_with_resample(query[0], query[1], graph_id)
-                self._update_evidence(query[0], query[1], graph_id)
+                self._update_evidence_with_resample(query[0], query[1], graph_id)
+                # self._update_evidence(query[0], query[1], graph_id)
         if self.use_multithreading:
             # TODO: deal with keyboard interrupt
             for thread in thread_list:
@@ -938,12 +938,15 @@ class EvidenceGraphLM(GraphLM):
 
         ### Update Evidence Slope Here!!
 
-        current = self.channel_hypothesis_mapping[graph_id][
-            input_channel
-        ]  # current number of hypotheses
+        # parameters
         hypotheses_count_multiplier = 1.0
         hypotheses_old_to_new_ratio = 0.0
-        hypotheses_informed_to_offspring_ratio = 1.0
+        hypotheses_informed_to_offspring_ratio = 0.0
+
+        channel_range = self.channel_hypothesis_mapping[graph_id].channel_range(
+            input_channel
+        )
+        current = channel_range[1] - channel_range[0]
 
         # calculate the total number of hypotheses needed
         needed = current * hypotheses_count_multiplier
@@ -992,21 +995,21 @@ class EvidenceGraphLM(GraphLM):
         selected_rotations = initial_possible_channel_rotations[top_indices]
         selected_evidence = channel_evidence[top_indices]
 
-        # return selected_locations, selected_rotations, selected_evidence
+        return selected_locations, selected_rotations, selected_evidence
 
     def _sample_old(self, features, graph_id, old_count, input_channel):
         """Samples old hypotheses from the graph."""
         selected_locations = np.zeros((0, 3))
         selected_rotations = np.zeros((0, 3, 3))
         selected_evidence = np.zeros((0))
-        # return selected_locations, selected_rotations, selected_evidence
+        return selected_locations, selected_rotations, selected_evidence
 
     def _sample_offspring(self, features, graph_id, old_count, input_channel):
         """Samples old hypotheses from the graph."""
         selected_locations = np.zeros((0, 3))
         selected_rotations = np.zeros((0, 3, 3))
         selected_evidence = np.zeros((0))
-        # return selected_locations, selected_rotations, selected_evidence
+        return selected_locations, selected_rotations, selected_evidence
 
     def _update_evidence_with_resample(self, features, displacements, graph_id):
         """Resamples hypotheses and updates existing evidence.
@@ -1043,6 +1046,7 @@ class EvidenceGraphLM(GraphLM):
             informed_locations, informed_rotations, informed_evidence = (
                 self._sample_informed(features, graph_id, informed_count, input_channel)
             )
+
             old_locations, old_rotations, old_evidence = self._sample_old(
                 features, graph_id, old_count, input_channel
             )
@@ -1052,10 +1056,26 @@ class EvidenceGraphLM(GraphLM):
                 )
             )
 
-            # displace and update hypotheses
-            old_offspring_locations = np.vstack(old_locations, offspring_locations)
-            old_offspring_rotations = np.vstack(old_rotations, offspring_rotations)
-            old_offspring_evidence = np.hstack(old_evidence, offspring_evidence)
+            # TODO: add displacement to old and offspring here
+
+            # Full hypothesis space
+            channel_locations = np.vstack(
+                [informed_locations, old_locations, offspring_locations]
+            )
+            channel_rotations = np.vstack(
+                [informed_rotations, old_rotations, offspring_rotations]
+            )
+            channel_evidence = np.hstack(
+                [informed_evidence, old_evidence, offspring_evidence]
+            )
+
+            self._replace_hypotheses_in_hpspace(
+                graph_id=graph_id,
+                input_channel=input_channel,
+                new_loc_hypotheses=channel_locations,
+                new_rot_hypotheses=channel_rotations,
+                new_evidence=channel_evidence,
+            )
 
         end_time = time.time()
         assert not np.isnan(np.max(self.evidence[graph_id])), "evidence contains NaN."
@@ -1064,6 +1084,56 @@ class EvidenceGraphLM(GraphLM):
             f"{np.round(end_time - start_time,2)} seconds."
             f" New max evidence: {np.round(np.max(self.evidence[graph_id]),3)}"
         )
+
+    def _replace_hypotheses_in_hpspace(
+        self,
+        graph_id,
+        input_channel,
+        new_loc_hypotheses,
+        new_rot_hypotheses,
+        new_evidence,
+    ):
+        if input_channel not in self.channel_hypothesis_mapping[graph_id].channels:
+            self.possible_locations[graph_id] = np.array(new_loc_hypotheses)
+            self.possible_poses[graph_id] = np.array(new_rot_hypotheses)
+            self.evidence[graph_id] = np.array(new_evidence)
+
+            self.channel_hypothesis_mapping[graph_id].add_channel(
+                input_channel, len(new_evidence)
+            )
+        else:
+            channel_start_ix, channel_end_ix = self.channel_hypothesis_mapping[
+                graph_id
+            ].channel_range(input_channel)
+            channel_size = channel_end_ix - channel_start_ix
+
+            self.possible_locations[graph_id] = np.concatenate(
+                [
+                    self.possible_locations[graph_id][:channel_start_ix],
+                    np.array(new_loc_hypotheses),
+                    self.possible_locations[graph_id][channel_end_ix:],
+                ]
+            )
+
+            self.possible_poses[graph_id] = np.concatenate(
+                [
+                    self.possible_poses[graph_id][:channel_start_ix],
+                    np.array(new_rot_hypotheses),
+                    self.possible_poses[graph_id][channel_end_ix:],
+                ]
+            )
+
+            self.evidence[graph_id] = np.concatenate(
+                [
+                    self.evidence[graph_id][:channel_start_ix],
+                    np.array(new_evidence),
+                    self.evidence[graph_id][channel_end_ix:],
+                ]
+            )
+
+            self.channel_hypothesis_mapping[graph_id].resize_channel_by(
+                input_channel, len(new_evidence) - channel_size
+            )
 
     ### === End Resampling Hypotheses Functions === #
 
