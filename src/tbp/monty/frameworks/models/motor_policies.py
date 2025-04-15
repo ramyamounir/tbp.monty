@@ -14,7 +14,7 @@ import json
 import logging
 import math
 import os
-from typing import Any, Callable, Dict, List, Mapping, Tuple, Type, Union, cast
+from typing import Dict, List, Literal, Mapping, Tuple, Type, Union, cast
 
 import numpy as np
 import quaternion as qt
@@ -42,43 +42,69 @@ from tbp.monty.frameworks.utils.spatial_arithmetics import get_angle_beefed_up
 from tbp.monty.frameworks.utils.transform_utils import scipy_to_numpy_quat
 
 
-class MotorSystem(abc.ABC, Callable):
-    @property
-    @abc.abstractmethod
-    def last_action(self) -> Action:
-        pass
+class MotorPolicy(abc.ABC):
+    """The abstract scaffold for motor policies."""
 
-    @abc.abstractmethod
-    def update(self, actions):
-        # TODO: nobody is using this. Is this still valid?
-        pass
-
-    @abc.abstractmethod
-    def set_experiment_mode(self, mode):
-        pass
+    def __init__(self) -> None:
+        self.is_predefined = False
 
     @abc.abstractmethod
     def dynamic_call(self) -> Action:
-        """Use this method when actions are not predefined."""
+        """Use this method when actions are not predefined.
+
+        Returns:
+            (Action): The action to take.
+        """
         pass
 
+    @property
     @abc.abstractmethod
-    def predefined_call(self) -> Tuple[Union[str, None], Any]:
-        """Use this method when actions are not predefined."""
+    def last_action(self) -> Action:
+        """Returns the last action taken by the motor policy."""
         pass
 
     @abc.abstractmethod
     def post_action(self, action: Action) -> None:
-        """This method will automatically be called at the end of __call__."""
+        """This post action hook will automatically be called at the end of __call__.
+
+        Args:
+            action (Action): The action to process the hook for.
+        """
+        pass
+
+    @abc.abstractmethod
+    def post_episode(self) -> None:
+        """Post episode hook."""
+        pass
+
+    @abc.abstractmethod
+    def pre_episode(self) -> None:
+        """Pre episode hook."""
+        pass
+
+    @abc.abstractmethod
+    def predefined_call(self) -> Action:
+        """Use this method when actions are predefined.
+
+        Returns:
+            (Action): The action to take.
+        """
+        pass
+
+    @abc.abstractmethod
+    def set_experiment_mode(self, mode: Literal["train", "eval"]) -> None:
+        """Sets the experiment mode.
+
+        Args:
+            mode (Literal["train", "eval"]): The experiment mode to set.
+        """
         pass
 
     def __call__(self) -> Action:
-        """Defines the structure for __call__.
-
-        Selects dynamic or predfined call, and then calls post_action.
+        """Select either dynamic or predefined call.
 
         Returns:
-            Action to take.
+            (Action): The action to take.
         """
         if self.is_predefined:
             action = self.predefined_call()
@@ -88,7 +114,7 @@ class MotorSystem(abc.ABC, Callable):
         return action
 
 
-class BasePolicy(MotorSystem):
+class BasePolicy(MotorPolicy):
     def __init__(
         self,
         rng,
@@ -111,6 +137,7 @@ class BasePolicy(MotorSystem):
             file_name: Path to file with predefined actions. Defaults to None.
             file_names_per_episode: ?. Defaults to None.
         """
+        super().__init__()
         ###
         # Define instance attributes
         ###
@@ -214,11 +241,9 @@ class BasePolicy(MotorSystem):
         else:
             return False
 
+    @property
     def last_action(self) -> Action:
         return self.action
-
-    def update(self, *args):
-        pass
 
     def state_dict(self):
         return {"timestep": self.timestep, "episode_step": self.episode_step}
@@ -227,7 +252,7 @@ class BasePolicy(MotorSystem):
         self.timestep = state_dict["timestep"]
         self.episode_step = state_dict["episode_step"]
 
-    def set_experiment_mode(self, mode):
+    def set_experiment_mode(self, mode: Literal["train", "eval"]) -> None:
         pass
 
 
@@ -374,9 +399,10 @@ class InformedPolicy(BasePolicy, JumpToGoalStateMixin):
             observation_shape[0] // 2, observation_shape[1] // 2
         ]
         if initial_pose:
-            assert (
-                depth_at_center > 0
-            ), "Object must be initialized such that the agent can visualize it by moving forward"  # noqa: E501
+            assert depth_at_center > 0, (
+                "Object must be initialized such that "
+                "agent can visualize it by moving forward"
+            )
             # TODO investigate - I think this may have always been passing in the
             # original surface-agent policy implementation because the surface
             # sensor clips at 1.0, so even if the object isn't strictly visible (or
@@ -434,7 +460,7 @@ class InformedPolicy(BasePolicy, JumpToGoalStateMixin):
         An Action.undo of some sort would be a better solution, however it is not
         yet clear to me what to do for actions that do not support undo.
         """
-        last_action = self.last_action()
+        last_action = self.last_action
 
         if isinstance(last_action, LookDown):
             return LookDown(
@@ -844,6 +870,7 @@ class InformedPolicy(BasePolicy, JumpToGoalStateMixin):
         on_target_object = semantic[y_mid, x_mid] == target_semantic_id
         return on_target_object
 
+
 class NaiveScanPolicy(InformedPolicy):
     """Policy that just moves left and right along the object."""
 
@@ -1204,7 +1231,7 @@ class SurfacePolicy(InformedPolicy):
         if not hasattr(self, "processed_observations"):
             return None
 
-        last_action = self.last_action()
+        last_action = self.last_action
 
         if isinstance(last_action, MoveForward):
             return self._orient_horizontal()
@@ -1340,9 +1367,9 @@ class SurfacePolicy(InformedPolicy):
         x, y, z = rotated_point_normal
 
         if "horizontal" == orienting:
-            return -np.degrees(np.arctan(x / z)) if z != 0 else -np.sign(x)*90.0
+            return -np.degrees(np.arctan(x / z)) if z != 0 else -np.sign(x) * 90.0
         if "vertical" == orienting:
-            return -np.degrees(np.arctan(y / z)) if z != 0 else -np.sign(y)*90.0
+            return -np.degrees(np.arctan(y / z)) if z != 0 else -np.sign(y) * 90.0
 
 
 ###
@@ -1691,7 +1718,7 @@ class SurfacePolicyCurvatureInformed(SurfacePolicy):
 
         # Before updating the representation and removing z-axis direction, check
         # for movements defined in the z-axis
-        if int(np.argmax(np.abs(rotated_form))) == int(2):
+        if int(np.argmax(np.abs(rotated_form))) == 2:
             # TODO decide if in cases where the PC is defined in the z-direction
             # relative to the agent, it might actually make sense to still follow it,
             # i.e. as it should representa a movement tangential to the surface, and
@@ -2204,9 +2231,9 @@ def projected_angle_from_vec(vector):
     for test_theta in test_thetas:
         test_vec = projected_vec_from_angle(test_theta)
         recovered = math.atan2(test_vec[0], test_vec[1])
-        assert (
-            abs(test_theta - recovered) < 0.01
-        ), f"Issue with angle recovery for : {test_theta} vs. {recovered}"
+        assert abs(test_theta - recovered) < 0.01, (
+            f"Issue with angle recovery for : {test_theta} vs. {recovered}"
+        )
 
     return math.atan2(vector[0], vector[1])
 

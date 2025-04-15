@@ -65,7 +65,7 @@ class MontyForEvidenceGraphMatching(MontyForGraphMatching):
         super()._pass_infos_to_motor_system()
 
         # Check the motor-system can receive goal-states
-        if self.motor_system.use_goal_state_driven_actions:
+        if self.motor_system._policy.use_goal_state_driven_actions:
             best_goal_state = None
             best_goal_confidence = -np.inf
             for current_goal_state in self.gsg_outputs:
@@ -76,7 +76,7 @@ class MontyForEvidenceGraphMatching(MontyForGraphMatching):
                     best_goal_state = current_goal_state
                     best_goal_confidence = current_goal_state.confidence
 
-            self.motor_system.set_driving_goal_state(best_goal_state)
+            self.motor_system._policy.set_driving_goal_state(best_goal_state)
 
     def _combine_votes(self, votes_per_lm):
         """Combine evidence from different lms.
@@ -284,9 +284,8 @@ class EvidenceGraphLM(GraphLM):
         *args,
         **kwargs,
     ):
-        super(EvidenceGraphLM, self).__init__(
-            initialize_base_modules=False, *args, **kwargs
-        )
+        kwargs["initialize_base_modules"] = False
+        super(EvidenceGraphLM, self).__init__(*args, **kwargs)
         # --- LM components ---
         self.graph_memory = EvidenceGraphMemory(
             graph_delta_thresholds=graph_delta_thresholds,
@@ -783,12 +782,7 @@ class EvidenceGraphLM(GraphLM):
             "current_mlh": self.get_current_mlh(),
         }
         if self.has_detailed_logger:
-            # Save possible poses once since they don't change during episode
-            get_rotations = False
-            if "possible_rotations" not in self.buffer.stats.keys():
-                get_rotations = True
-
-            stats = self._add_detailed_stats(stats, get_rotations)
+            stats = self._add_detailed_stats(stats)
         return stats
 
     # ======================= Private ==========================
@@ -1924,7 +1918,12 @@ class EvidenceGraphLM(GraphLM):
         # self.buffer.update_stats(vote_data, update_time=False)
         pass
 
-    def _add_detailed_stats(self, stats, get_rotations):
+    def _add_detailed_stats(self, stats):
+        # Save possible poses once since they don't change during episode
+        get_rotations = False
+        if "possible_rotations" not in self.buffer.stats.keys():
+            get_rotations = True
+
         stats["possible_locations"] = self.possible_locations
         if get_rotations:
             stats["possible_rotations"] = self.get_possible_poses(as_euler=False)

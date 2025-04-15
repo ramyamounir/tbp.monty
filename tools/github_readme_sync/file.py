@@ -9,11 +9,12 @@
 # https://opensource.org/licenses/MIT.
 
 import os
+from pathlib import Path
 
 
 def get_folders(file_path: str) -> list:
     return [
         name
         for name in os.listdir(file_path)
-        if os.path.isdir(os.path.join(file_path, name))
+        if Path(file_path).joinpath(name).is_dir()
     ]
