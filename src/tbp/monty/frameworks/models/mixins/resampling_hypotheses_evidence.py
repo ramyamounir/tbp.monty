@@ -44,7 +44,6 @@ class ResamplingHypothesesEvidenceMixin:
                 f"EvidenceGraphLM, got {cls.__bases__}"
             )
 
-
     def _update_evidence(self, features, displacements, graph_id):
         """Resamples hypotheses and updates existing evidence.
 
@@ -71,12 +70,12 @@ class ResamplingHypothesesEvidenceMixin:
             )
 
         for input_channel in input_channels_to_use:
-            # get sample counts
+            # === GET SAMPLE COUNT ===
             old_count, informed_count, offspring_count = self._sample_count(
                 input_channel, features, graph_id
             )
 
-            # do the sampling
+            # === SAMPLE HYPOTHESES ===
             informed_locations, informed_rotations, informed_evidence = (
                 self._sample_informed(features, graph_id, informed_count, input_channel)
             )
@@ -90,7 +89,6 @@ class ResamplingHypothesesEvidenceMixin:
             )
 
             # === DISPLACE HYPOTHESES ===
-
             if old_count > 0:
                 old_locations, old_evidence = self._displace_hypotheses(
                     features,
@@ -102,7 +100,7 @@ class ResamplingHypothesesEvidenceMixin:
                     input_channel,
                 )
 
-            # Full hypothesis space for input channel
+            # === CONCATENATE HYPOTHESES ===
             channel_locations = np.vstack(
                 [informed_locations, old_locations, offspring_locations]
             )
@@ -113,7 +111,7 @@ class ResamplingHypothesesEvidenceMixin:
                 [informed_evidence, old_evidence, offspring_evidence]
             )
 
-            # insert the channel hypotheses
+            # === RE-BUILD HYPOTHESIS SPACE ===
             self._replace_hypotheses_in_hpspace(
                 graph_id=graph_id,
                 input_channel=input_channel,
@@ -129,7 +127,6 @@ class ResamplingHypothesesEvidenceMixin:
             f"{np.round(end_time - start_time,2)} seconds."
             f" New max evidence: {np.round(np.max(self.evidence[graph_id]),3)}"
         )
-
 
     def _sample_count(self, input_channel, features, graph_id):
         """Returns the number of needed hypotheses."""
@@ -190,19 +187,26 @@ class ResamplingHypothesesEvidenceMixin:
         )
 
     def _sample_informed(self, features, graph_id, informed_count, input_channel):
-        (
-            initial_possible_channel_locations,
-            initial_possible_channel_rotations,
-            channel_evidence,
-        ) = self._get_initial_hypothesis_space(features, graph_id, input_channel)
+        if informed_count == 0:
+            selected_locations = np.zeros((0, 3))
+            selected_rotations = np.zeros((0, 3, 3))
+            selected_evidence = np.zeros((0))
+        else:
+            (
+                initial_possible_channel_locations,
+                initial_possible_channel_rotations,
+                channel_evidence,
+            ) = self._get_initial_hypothesis_space(features, graph_id, input_channel)
 
-        # Get the indices of the top `informed_count` values in `channel_evidence`
-        top_indices = np.argsort(channel_evidence)[-informed_count:]  # Get top indices
+            # Get the indices of the top `informed_count` values in `channel_evidence`
+            top_indices = np.argsort(channel_evidence)[
+                -informed_count:
+            ]  # Get top indices
 
-        # Select the corresponding entries from the original arrays
-        selected_locations = initial_possible_channel_locations[top_indices]
-        selected_rotations = initial_possible_channel_rotations[top_indices]
-        selected_evidence = channel_evidence[top_indices]
+            # Select the corresponding entries from the original arrays
+            selected_locations = initial_possible_channel_locations[top_indices]
+            selected_rotations = initial_possible_channel_rotations[top_indices]
+            selected_evidence = channel_evidence[top_indices]
 
         return selected_locations, selected_rotations, selected_evidence
 
@@ -245,7 +249,7 @@ class ResamplingHypothesesEvidenceMixin:
         hyp_ids_to_test = np.where(evidence >= evidence_threshold)[0]
         num_hypotheses_to_test = hyp_ids_to_test.shape[0]
         if num_hypotheses_to_test > 0:
-            new_evidence = self._calculate_evidence_for_new_locations_new(
+            new_evidence = self._calculate_evidence_for_new_locations(
                 graph_id,
                 input_channel,
                 search_locations[hyp_ids_to_test],
@@ -346,7 +350,6 @@ class ResamplingHypothesesEvidenceMixin:
             axis=1,
         )
         return location_evidence
-
 
     def _replace_hypotheses_in_hpspace(
         self,
