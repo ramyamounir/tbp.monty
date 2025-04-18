@@ -14,7 +14,10 @@ from typing import Any
 import numpy as np
 
 from tbp.monty.frameworks.models.evidence_matching import EvidenceGraphLM
-from tbp.monty.frameworks.utils.evidence_matching import ChannelMapper
+from tbp.monty.frameworks.utils.evidence_matching import (
+    ChannelMapper,
+    EvidenceSlopeTracker,
+)
 from tbp.monty.frameworks.utils.graph_matching_utils import (
     get_custom_distances,
     get_relevant_curvature,
@@ -30,6 +33,14 @@ class ResamplingHypothesesEvidenceMixin:
     Compatible with:
         - EvidenceGraphLM
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.evidence_slope = {}
+
+    def reset(self) -> None:
+        super().reset()
+        self.evidence_slope = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Ensure the mixin is used only with compatible learning modules.
@@ -54,6 +65,7 @@ class ResamplingHypothesesEvidenceMixin:
 
         if graph_id not in self.channel_hypothesis_mapping:
             self.channel_hypothesis_mapping[graph_id] = ChannelMapper()
+            self.evidence_slope[graph_id] = {}
 
         # get all usable input channels
         input_channels_to_use = [
@@ -70,6 +82,12 @@ class ResamplingHypothesesEvidenceMixin:
             )
 
         for input_channel in input_channels_to_use:
+            # Temporary
+            if input_channel not in self.evidence_slope[graph_id]:
+                self.evidence_slope[graph_id][input_channel] = EvidenceSlopeTracker(
+                    window_size=5, min_age=2
+                )
+
             # === GET SAMPLE COUNT ===
             old_count, informed_count, _ = self._sample_count(
                 input_channel, features, graph_id
