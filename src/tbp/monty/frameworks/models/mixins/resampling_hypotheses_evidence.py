@@ -71,21 +71,16 @@ class ResamplingHypothesesEvidenceMixin:
 
         for input_channel in input_channels_to_use:
             # === GET SAMPLE COUNT ===
-            old_count, informed_count, offspring_count = self._sample_count(
+            old_count, informed_count, _ = self._sample_count(
                 input_channel, features, graph_id
             )
 
             # === SAMPLE HYPOTHESES ===
-            informed_locations, informed_rotations, informed_evidence = (
-                self._sample_informed(features, graph_id, informed_count, input_channel)
-            )
             old_locations, old_rotations, old_evidence = self._sample_old(
                 features, graph_id, old_count, input_channel
             )
-            offspring_locations, offspring_rotations, offspring_evidence = (
-                self._sample_offspring(
-                    features, graph_id, offspring_count, input_channel
-                )
+            informed_locations, informed_rotations, informed_evidence = (
+                self._sample_informed(features, graph_id, informed_count, input_channel)
             )
 
             # === DISPLACE HYPOTHESES ===
@@ -101,15 +96,9 @@ class ResamplingHypothesesEvidenceMixin:
                 )
 
             # === CONCATENATE HYPOTHESES ===
-            channel_locations = np.vstack(
-                [informed_locations, old_locations, offspring_locations]
-            )
-            channel_rotations = np.vstack(
-                [informed_rotations, old_rotations, offspring_rotations]
-            )
-            channel_evidence = np.hstack(
-                [informed_evidence, old_evidence, offspring_evidence]
-            )
+            channel_locations = np.vstack([old_locations, informed_locations])
+            channel_rotations = np.vstack([old_rotations, informed_rotations])
+            channel_evidence = np.hstack([old_evidence, informed_evidence])
 
             # === RE-BUILD HYPOTHESIS SPACE ===
             self._replace_hypotheses_in_hpspace(
@@ -221,13 +210,6 @@ class ResamplingHypothesesEvidenceMixin:
             selected_rotations = self.possible_poses[graph_id][:old_count]
             selected_evidence = self.evidence[graph_id][:old_count]
 
-        return selected_locations, selected_rotations, selected_evidence
-
-    def _sample_offspring(self, features, graph_id, old_count, input_channel):
-
-        selected_locations = np.zeros((0, 3))
-        selected_rotations = np.zeros((0, 3, 3))
-        selected_evidence = np.zeros((0))
         return selected_locations, selected_rotations, selected_evidence
 
     def _displace_hypotheses(
