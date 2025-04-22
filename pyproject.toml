@@ -298,13 +298,9 @@ ignore = [
     "TD005", # TD005: Missing issue description after `TODO`
     "TRY002", # TRY002: Create your own exception
     "TRY003", # TRY003: Avoid specifying long messages outside the exception class
-    "TRY004", # TRY004: Prefer `TypeError` exception for invalid type
-    "UP005", # UP005: `assertEquals` is deprecated, use `assertEqual`
     "UP006", # UP006: Use `type` instead of `Type` for type annotation
     "UP008", # UP008: Use `super()` instead of `super(__class__, self)`
     "UP015", # UP015: Unnecessary open mode parameters
-    "UP031", # UP031: Use format specifiers instead of percent format
-    "UP034", # UP034: Avoid extraneous parentheses
 ]
 
 [tool.ruff.lint.flake8-copyright]
