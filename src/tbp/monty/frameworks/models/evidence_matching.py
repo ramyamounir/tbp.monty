@@ -65,7 +65,7 @@ class MontyForEvidenceGraphMatching(MontyForGraphMatching):
         super()._pass_infos_to_motor_system()
 
         # Check the motor-system can receive goal-states
-        if self.motor_system.use_goal_state_driven_actions:
+        if self.motor_system._policy.use_goal_state_driven_actions:
             best_goal_state = None
             best_goal_confidence = -np.inf
             for current_goal_state in self.gsg_outputs:
@@ -76,7 +76,7 @@ class MontyForEvidenceGraphMatching(MontyForGraphMatching):
                     best_goal_state = current_goal_state
                     best_goal_confidence = current_goal_state.confidence
 
-            self.motor_system.set_driving_goal_state(best_goal_state)
+            self.motor_system._policy.set_driving_goal_state(best_goal_state)
 
     def _combine_votes(self, votes_per_lm):
         """Combine evidence from different lms.
@@ -284,9 +284,8 @@ class EvidenceGraphLM(GraphLM):
         *args,
         **kwargs,
     ):
-        super(EvidenceGraphLM, self).__init__(
-            initialize_base_modules=False, *args, **kwargs
-        )
+        kwargs["initialize_base_modules"] = False
+        super(EvidenceGraphLM, self).__init__(*args, **kwargs)
         # --- LM components ---
         self.graph_memory = EvidenceGraphMemory(
             graph_delta_thresholds=graph_delta_thresholds,
@@ -832,7 +831,7 @@ class EvidenceGraphLM(GraphLM):
             # add evidence if features match
             evidence = np.array(nwmf_stacked) * self.feature_evidence_increment
         else:
-            evidence = np.zeros((initial_possible_channel_rotations.shape[0]))
+            evidence = np.zeros(initial_possible_channel_rotations.shape[0])
         return (
             initial_possible_channel_locations,
             initial_possible_channel_rotations,
@@ -1281,7 +1280,7 @@ class EvidenceGraphLM(GraphLM):
         """
         # TODO S: simplify by looping over pose vectors
         evidences_shape = node_distance_weights.shape[:2]
-        pose_evidence_weighted = np.zeros((evidences_shape))
+        pose_evidence_weighted = np.zeros(evidences_shape)
         # TODO H: at higher level LMs we may want to look at all pose vectors.
         # Currently we skip the third since the second curv dir is always 90 degree
         # from the first.
@@ -1869,7 +1868,7 @@ class EvidenceGraphMemory(GraphMemory):
         for input_channel in model.keys():
             channel_model = model[input_channel]
             try:
-                if type(channel_model) == GraphObjectModel:
+                if isinstance(channel_model, GraphObjectModel):
                     # When loading a model trained with a different LM, need to convert
                     # it to the GridObjectModel (with use_original_graph == True)
                     loaded_graph = channel_model._graph

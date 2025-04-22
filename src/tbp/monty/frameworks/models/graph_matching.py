@@ -158,7 +158,7 @@ class MontyForGraphMatching(MontyBase):
         for lm in self.learning_modules:
             lm.update_terminal_condition()
             logging.debug(
-                f"{lm.learning_module_id} has terminal state: " f"{lm.terminal_state}"
+                f"{lm.learning_module_id} has terminal state: {lm.terminal_state}"
             )
             # If any LM is not done yet, we are not done yet
             if lm.terminal_state == "match":
@@ -308,7 +308,7 @@ class MontyForGraphMatching(MontyBase):
         """
         combined_votes = []
         for i in range(len(self.learning_modules)):
-            if type(votes_per_lm[0]) == set:
+            if isinstance(votes_per_lm[0], set):
                 # Negative set voting for compatibility with displacement LM
                 # TODO: make this cleaner.
                 vote = None
@@ -498,11 +498,11 @@ class MontyForGraphMatching(MontyBase):
         provides locations associated with tangential movements; this can help ensure we
         e.g. avoid revisiting old locations.
         """
-        self.motor_system.processed_observations = infos
+        self.motor_system._policy.processed_observations = infos
 
         # TODO M clean up the below when refactoring the surface-agent policy
-        if hasattr(self.motor_system, "tangent_locs"):
-            last_action = self.motor_system.last_action()
+        if hasattr(self.motor_system._policy, "tangent_locs"):
+            last_action = self.motor_system._policy.last_action
 
             if last_action is not None:
                 if "orient_vertical" == last_action.name:
@@ -510,10 +510,10 @@ class MontyForGraphMatching(MontyBase):
                     # action, rather than some form of corrective movement; these
                     # movements are performed immediately after "orient_vertical"
                     # TODO generalize to multiple sensor modules
-                    self.motor_system.tangent_locs.append(
+                    self.motor_system._policy.tangent_locs.append(
                         self.sensor_modules[0].visited_locs[-1]
                     )
-                    self.motor_system.tangent_norms.append(
+                    self.motor_system._policy.tangent_norms.append(
                         self.sensor_modules[0].visited_normals[-1]
                     )
 
@@ -768,9 +768,6 @@ class GraphLM(LearningModule):
             logging.info(f"{self.learning_module_id} did not recognize an object yet.")
         return self.terminal_state
 
-    def _agent_moved_since_reset(self):
-        return len(self.buffer) > 0
-
     # ------------------ Getters & Setters ---------------------
 
     def set_experiment_mode(self, mode):
@@ -921,16 +918,15 @@ class GraphLM(LearningModule):
 
     def set_individual_ts(self, terminal_state):
         logging.info(
-            f"Setting terminal state of {self.learning_module_id} "
-            f"to {terminal_state}"
+            f"Setting terminal state of {self.learning_module_id} to {terminal_state}"
         )
         self.set_detected_object(terminal_state)
         if terminal_state == "match":
             logging.info(
                 f"{self.learning_module_id}: "
                 f"Detected {self.detected_object} "
-                f"at location {np.round(self.detected_pose[:3],3)},"
-                f" rotation {np.round(self.detected_pose[3:6],3)},"
+                f"at location {np.round(self.detected_pose[:3], 3)},"
+                f" rotation {np.round(self.detected_pose[3:6], 3)},"
                 f" and scale {self.detected_pose[6]}"
             )
             self.buffer.set_individual_ts(self.detected_object, self.detected_pose)
@@ -1041,6 +1037,9 @@ class GraphLM(LearningModule):
                 self.target_to_graph_id[target_object] = set([detected_object])
             else:
                 self.target_to_graph_id[target_object].add(detected_object)
+
+    def _agent_moved_since_reset(self):
+        return len(self.buffer) > 0
 
     # ------------------------ Helper --------------------------
 

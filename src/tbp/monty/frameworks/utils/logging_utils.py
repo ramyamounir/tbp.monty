@@ -388,18 +388,35 @@ def get_time_stats(all_ds, all_conditions):
     return time_stats
 
 
-def get_pose_error(detected_pose, target_pose):
-    if type(detected_pose) != list:
-        detected_pose = [detected_pose]
-    target_r = Rotation.from_quat(target_pose)
-    min_error = np.pi
-    for det_r in detected_pose:
-        detected_r = Rotation.from_quat(det_r)
-        difference = detected_r * target_r.inv()
-        error = difference.magnitude()
-        if error < min_error:
-            min_error = error
-    return min_error
+def compute_pose_error(
+    predicted_rotation: Rotation, target_rotation: Rotation
+) -> float:
+    """Computes the minimum angular pose error between predicted and target rotations.
+
+    Both inputs must be instances of `scipy.spatial.transform.Rotation`. The
+    `predicted_rotation` may contain a single rotation or a list of rotations,
+    while `target_rotation` must be exactly one rotation.
+
+    The pose error is defined as the geodesic distance on SO(3) — the angle of the
+    relative rotation between predicted and target. If `predicted_rotation` contains
+    multiple rotations, this function returns the minimum error among them.
+
+    Note that the `.inv()` operation in this method is due to how geodesic distance
+    between two rotations is calculated, not a side-effect of whether the target
+    rotation is stored in its normal form, or as its inverse. The function therefore
+    assumes that the orientations are already in the same coordinate system before
+    the comparison.
+
+    Args:
+        predicted_rotation (Rotation): Predicted rotation(s). Can be a single or list of
+            rotation.
+        target_rotation (Rotation): Target rotation. Must represent a single rotation.
+
+    Returns:
+        float: The minimum angular error in radians.
+    """
+    error = np.min((predicted_rotation * target_rotation.inv()).magnitude())
+    return error
 
 
 def get_overall_pose_error(stats, lm_id="LM_0"):
@@ -420,7 +437,9 @@ def get_overall_pose_error(stats, lm_id="LM_0"):
         detected = stats[episode][lm_id]["detected_rotation_quat"]
         if detected is not None:  # only checking accuracy on detected objects
             target = stats[episode][lm_id]["target"]["quat_rotation"]
-            err = get_pose_error(detected, target)
+            err = compute_pose_error(
+                Rotation.from_quat(detected), Rotation.from_quat(target)
+            )
             errors.append(err)
     return np.round(np.mean(errors), 4)
 
@@ -574,9 +593,9 @@ def get_graph_lm_episode_stats(lm):
                 else:
                     detected_rotation = lm.buffer.stats["detected_rotation_quat"]
                 rotation_error = np.round(
-                    get_pose_error(
-                        detected_rotation,
-                        lm.primary_target_rotation_quat,
+                    compute_pose_error(
+                        Rotation.from_quat(detected_rotation),
+                        Rotation.from_quat(lm.primary_target_rotation_quat),
                     ),
                     4,
                 )
@@ -615,9 +634,9 @@ def get_graph_lm_episode_stats(lm):
                     else:
                         detected_rotation_ts = lm.buffer.stats["individual_ts_rot"]
                     individual_ts_rotation_error = np.round(
-                        get_pose_error(
-                            detected_rotation_ts,
-                            lm.primary_target_rotation_quat,
+                        compute_pose_error(
+                            Rotation.from_quat(detected_rotation_ts),
+                            Rotation.from_quat(lm.primary_target_rotation_quat),
                         ),
                         4,
                     )
@@ -754,9 +773,9 @@ def add_evidence_lm_episode_stats(lm, stats):
     )
     if stats["primary_performance"] == "correct_mlh":
         stats["rotation_error"] = np.round(
-            get_pose_error(
-                last_mlh["rotation"].inv().as_quat(),
-                lm.primary_target_rotation_quat,
+            compute_pose_error(
+                last_mlh["rotation"].inv(),
+                Rotation.from_quat(lm.primary_target_rotation_quat),
             ),
             4,
         )

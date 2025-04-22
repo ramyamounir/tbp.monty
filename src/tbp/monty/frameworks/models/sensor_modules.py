@@ -402,7 +402,7 @@ class NoiseMixin:
         return sensor_data
 
     def add_noise_to_feat_value(self, feat_name, feat_val):
-        if type(feat_val) == bool:
+        if isinstance(feat_val, bool):
             # Flip boolian variable with probability specified in
             # noise_params
             if self.rng.random() < self.noise_params["features"][feat_name]:
@@ -506,6 +506,8 @@ class HabitatDistantPatchSM(DetailedLoggingSM, NoiseMixin):
         sensor_position = state["sensors"][self.sensor_module_id + ".rgba"]["position"]
         if "motor_only_step" in state.keys():
             self.motor_only_step = state["motor_only_step"]
+        else:
+            self.motor_only_step = False
 
         agent_rotation = state["rotation"]
         sensor_rotation = state["sensors"][self.sensor_module_id + ".rgba"]["rotation"]

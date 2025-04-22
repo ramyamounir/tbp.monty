@@ -20,6 +20,7 @@ from tbp.monty.frameworks.config_utils.config_args import (
     LoggingConfig,
     MontyFeatureGraphArgs,
     PatchAndViewMontyConfig,
+    PretrainLoggingConfig,
 )
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
     EnvironmentDataLoaderPerObjectEvalArgs,
@@ -29,6 +30,9 @@ from tbp.monty.frameworks.config_utils.make_dataset_configs import (
 )
 from tbp.monty.frameworks.environments import embodied_data as ED
 from tbp.monty.frameworks.experiments import MontyObjectRecognitionExperiment
+from tbp.monty.frameworks.experiments.pretraining_experiments import (
+    MontySupervisedObjectPretrainingExperiment,
+)
 from tbp.monty.frameworks.models.evidence_matching import (
     EvidenceGraphLM,
     MontyForEvidenceGraphMatching,
@@ -79,15 +83,14 @@ class NoResetEvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
 
         self.output_dir = tempfile.mkdtemp()
 
-        self.evidence_config = dict(
-            experiment_class=MontyObjectRecognitionExperiment,
+        self.pretraining_configs = dict(
+            experiment_class=MontySupervisedObjectPretrainingExperiment,
             experiment_args=ExperimentArgs(
-                max_train_steps=30, max_eval_steps=30, max_total_steps=60
+                do_eval=False,
+                n_train_epochs=3,
             ),
-            # NOTE: could make unit tests faster by setting monty_log_level="BASIC" for
-            # some of them.
-            logging_config=LoggingConfig(
-                output_dir=self.output_dir, python_log_level="DEBUG"
+            logging_config=PretrainLoggingConfig(
+                output_dir=self.output_dir,
             ),
             monty_config=PatchAndViewMontyConfig(
                 monty_class=MontyForEvidenceGraphMatching,
@@ -103,22 +106,37 @@ class NoResetEvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
                 object_names=["capsule3DSolid", "cubeSolid"],
                 object_init_sampler=PredefinedObjectInitializer(),
             ),
+        )
+
+        self.unsupervised_evidence_config = dict(
+            experiment_class=MontyObjectRecognitionExperiment,
+            experiment_args=ExperimentArgs(
+                max_train_steps=30, max_eval_steps=30, max_total_steps=60
+            ),
+            # NOTE: could make unit tests faster by setting monty_log_level="BASIC" for
+            # some of them.
+            logging_config=LoggingConfig(
+                output_dir=self.output_dir, python_log_level="DEBUG", monty_handlers=[]
+            ),
+            monty_config=PatchAndViewMontyConfig(
+                monty_class=MontyForNoResetEvidenceGraphMatching,
+                monty_args=MontyFeatureGraphArgs(num_exploratory_steps=20),
+                learning_module_configs=default_unsupervised_evidence_lm_config,
+            ),
+            dataset_class=ED.EnvironmentDataset,
+            dataset_args=PatchViewFinderMountHabitatDatasetArgs(
+                env_init_args=EnvInitArgsPatchViewMount(data_path=None).__dict__,
+            ),
+            train_dataloader_class=ED.InformedEnvironmentDataLoader,
+            train_dataloader_args=EnvironmentDataLoaderPerObjectTrainArgs(
+                object_names=["capsule3DSolid", "cubeSolid"],
+                object_init_sampler=PredefinedObjectInitializer(),
+            ),
             eval_dataloader_class=ED.InformedEnvironmentDataLoader,
             eval_dataloader_args=EnvironmentDataLoaderPerObjectEvalArgs(
                 object_names=["capsule3DSolid"],
                 object_init_sampler=PredefinedObjectInitializer(),
             ),
-        )
-
-        self.unsupervised_evidence_config = copy.deepcopy(self.evidence_config)
-        self.unsupervised_evidence_config.update(
-            dict(
-                monty_config=PatchAndViewMontyConfig(
-                    monty_class=MontyForNoResetEvidenceGraphMatching,
-                    monty_args=MontyFeatureGraphArgs(num_exploratory_steps=20),
-                    learning_module_configs=default_unsupervised_evidence_lm_config,
-                ),
-            )
         )
 
     def assert_dicts_equal(
@@ -151,8 +169,8 @@ class NoResetEvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
         unsupervised Inference Experiment. Disabling the reset logic does not support
         training at the moment.
         """
-        train_config = copy.deepcopy(self.evidence_config)
-        with MontyObjectRecognitionExperiment(train_config) as train_exp:
+        train_config = copy.deepcopy(self.pretraining_configs)
+        with MontySupervisedObjectPretrainingExperiment(train_config) as train_exp:
             train_exp.train()
 
         eval_config = copy.deepcopy(self.unsupervised_evidence_config)

@@ -7,6 +7,7 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT.
 
+from typing import List
 
 import numpy as np
 
@@ -14,6 +15,10 @@ from tbp.monty.frameworks.models.evidence_matching import (
     EvidenceGraphLM,
     MontyForEvidenceGraphMatching,
 )
+from tbp.monty.frameworks.models.mixins.no_reset_evidence import (
+    TheoreticalLimitLMLoggingMixin,
+)
+from tbp.monty.frameworks.models.states import State
 
 
 class MontyForNoResetEvidenceGraphMatching(MontyForEvidenceGraphMatching):
@@ -88,7 +93,7 @@ class MontyForNoResetEvidenceGraphMatching(MontyForEvidenceGraphMatching):
             sm.processed_obs = []
 
 
-class NoResetEvidenceGraphLM(EvidenceGraphLM):
+class NoResetEvidenceGraphLM(TheoreticalLimitLMLoggingMixin, EvidenceGraphLM):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.last_location = {}
@@ -97,12 +102,12 @@ class NoResetEvidenceGraphLM(EvidenceGraphLM):
         # grow when objects are swapped without any supervisory signal.
         self.gsg.wait_growth_multiplier = 1
 
-    def reset(self):
+    def reset(self) -> None:
         super().reset()
         self.evidence = {}
         self.last_location = {}
 
-    def _add_displacements(self, obs):
+    def _add_displacements(self, obs: List[State]) -> List[State]:
         """Add displacements to the current observation.
 
         For each input channel, this function computes the displacement vector by
@@ -114,10 +119,12 @@ class NoResetEvidenceGraphLM(EvidenceGraphLM):
         at the beginning of the first episode when the last location is not set.
 
         Args:
-            obs: A list of observations to which displacements will be added.
+            obs (List[State]): A list of observations to which displacements will be
+                added.
 
         Returns:
-            - obs: The list of observations, each updated with a displacement vector.
+            obs (List[State]): The list of observations, each updated with a
+                displacement vector.
         """
         for o in obs:
             if o.sender_id in self.last_location.keys():
