@@ -307,7 +307,7 @@ class BaseGraphTestCases:
                     eval_stats["detected_scale"][2 * num_lms + lm_id],
                     eval_stats["primary_target_scale"][2 * num_lms + lm_id],
                     4,
-                    "Scale of capsule3DSolid not detected correctly " f"by lm {lm_id}.",
+                    f"Scale of capsule3DSolid not detected correctly by lm {lm_id}.",
                 )
                 capsule_r = self.string_to_array(
                     eval_stats["detected_rotation"][2 * num_lms + lm_id]
@@ -318,8 +318,7 @@ class BaseGraphTestCases:
                 self.assertLessEqual(
                     eval_stats["rotation_error"][2 * num_lms + lm_id],
                     0.001,
-                    "Rotation of capsule3DSolid not detected correctly "
-                    f"by lm {lm_id}.",
+                    f"Rotation of capsule3DSolid not detected correctly by lm {lm_id}.",
                 )
                 for i in range(3):
                     self.assertEqual(
@@ -441,7 +440,7 @@ class BaseGraphTestCases:
             self.assertNotIn(
                 "learning_module_0",
                 models["0"]["LM_1"]["new_object0"].keys(),
-                "models in LM1 should not store input from LM0 in episode " "0 yet.",
+                "models in LM1 should not store input from LM0 in episode 0 yet.",
             )
             # Check that LM1 extended its graph to add LM0 as a input channel.
             channel_keys = models["2"]["LM_1"]["new_object0"].keys()
@@ -454,8 +453,8 @@ class BaseGraphTestCases:
 
         def check_possible_paths_or_poses(self, stats_1, stats_2, key):
             for paths1, paths2 in zip(stats_1[key], stats_2[key]):
-                possible_objects_1 = set(list(paths1.keys()))
-                possible_objects_2 = set(list(paths2.keys()))
+                possible_objects_1 = set(paths1.keys())
+                possible_objects_2 = set(paths2.keys())
                 self.assertEqual(possible_objects_1, possible_objects_2)
                 for obj in possible_objects_1:
                     # I refuse to go deeper

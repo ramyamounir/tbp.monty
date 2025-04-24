@@ -115,7 +115,7 @@ def deserialize_json_chunks(json_file, start=0, stop=None, episodes=None):
         else:
             return (counter >= start) and (counter < stop)
 
-    detailed_json = dict()
+    detailed_json = {}
     stop = stop or np.inf
     with open(json_file, "r") as f:
         line_counter = 0
@@ -169,7 +169,7 @@ def matches_to_target_str(possible_matches, graph_to_target):
         targets = graph_to_target[match]
         possible_match_sources.update(targets)
 
-    sorted_targets = sorted(list(possible_match_sources))
+    sorted_targets = sorted(possible_match_sources)
     str_targets = "-".join(sorted_targets)
     return dict(possible_match_sources=str_targets)
 
@@ -453,13 +453,14 @@ def print_overall_stats(stats):
         / len(stats)
         * 100
     )
-    print(f"Detected {np.round(acc,2)}% correctly")
+    print(f"Detected {np.round(acc, 2)}% correctly")
     rt = np.sum(stats["time"])
     rt_per_step = np.mean(stats["time"] / stats["monty_matching_steps"])
     print(
-        f"overall run time: {np.round(rt,2)} seconds ({np.round(rt/60,2)} minutes),"
-        f" {np.round(rt/len(stats),2)} seconds per episode, {np.round(rt_per_step,2)} "
-        "seconds per step."
+        f"overall run time: {np.round(rt, 2)} seconds "
+        f"({np.round(rt / 60, 2)} minutes), "
+        f"{np.round(rt / len(stats), 2)} seconds per episode, "
+        f"{np.round(rt_per_step, 2)} seconds per step."
     )
 
 
@@ -487,10 +488,10 @@ def print_unsupervised_stats(stats, epoch_len):
         * 100
     )
     print(
-        f"Detected {np.round(first_epoch_acc,2)}% correctly as new object"
+        f"Detected {np.round(first_epoch_acc, 2)}% correctly as new object"
         "in first epoch"
     )
-    print(f"Detected {np.round(later_acc,2)}% correctly after first epoch")
+    print(f"Detected {np.round(later_acc, 2)}% correctly after first epoch")
     print(f"Mean objects per graph: {list(stats['mean_objects_per_graph'])[-1]}")
     print(f"Mean graphs per object: {list(stats['mean_graphs_per_object'])[-1]}")
     print("Merged graphs:")
@@ -499,8 +500,8 @@ def print_unsupervised_stats(stats, epoch_len):
             print("     " + string)
     rt = np.sum(stats["time"])
     print(
-        f"overall run time: {np.round(rt,2)} seconds ({np.round(rt/60,2)} minutes),"
-        f" {np.round(rt/len(stats),2)} seconds per episode."
+        f"overall run time: {np.round(rt, 2)} seconds ({np.round(rt / 60, 2)} minutes),"
+        f" {np.round(rt / len(stats), 2)} seconds per episode."
     )
 
 
@@ -726,7 +727,7 @@ def get_stats_per_lm(model, target):
     Returns:
         performance_dict: dict with stats per lm
     """
-    performance_dict = dict()
+    performance_dict = {}
     primary_target_dict = target_data_to_dict(target)
     for i, lm in enumerate(model.learning_modules):
         lm_stats = get_graph_lm_episode_stats(lm)
@@ -814,7 +815,7 @@ def target_data_to_dict(target):
     Returns:
         output_dict: dict with target params
     """
-    output_dict = dict()
+    output_dict = {}
     output_dict["primary_target_object"] = target["object"]
     output_dict["primary_target_position"] = target["position"]
     output_dict["primary_target_rotation_euler"] = target["euler_rotation"]
@@ -867,7 +868,7 @@ def lm_stats_to_dataframe(stats, format_for_wandb=False):
     """
     df_list = []
     for episode in stats.values():
-        lm_dict = dict()
+        lm_dict = {}
         # Loop over things like LM_*, SM_*, motor_system and get only LM_*
         for key in episode.keys():
             if isinstance(key, str):
@@ -920,8 +921,7 @@ def maybe_rename_existing_directory(path, report_count):
     if (report_count == 0) and os.path.exists(path):
         new_path = path + "_old"
         logging.warning(
-            f"Output path {path} already exists. This path will be moved"
-            f"to {new_path}"
+            f"Output path {path} already exists. This path will be movedto {new_path}"
         )
 
         if os.path.exists(new_path):

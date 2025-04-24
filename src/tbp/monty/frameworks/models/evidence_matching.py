@@ -86,7 +86,7 @@ class MontyForEvidenceGraphMatching(MontyForGraphMatching):
         """
         combined_votes = []
         for i in range(len(self.learning_modules)):
-            lm_state_votes = dict()
+            lm_state_votes = {}
             if votes_per_lm[i] is not None:
                 receiving_lm_pose = votes_per_lm[i]["sensed_pose_rel_body"]
                 for j in self.lm_to_lm_vote_matrix[i]:
@@ -294,7 +294,7 @@ class EvidenceGraphLM(GraphLM):
             num_model_voxels_per_dim=num_model_voxels_per_dim,
         )
         if gsg_args is None:
-            gsg_args = dict()
+            gsg_args = {}
         self.gsg = gsg_class(self, **gsg_args)
         self.gsg.reset()
         # --- Matching Params ---
@@ -459,7 +459,7 @@ class EvidenceGraphLM(GraphLM):
             # Get pose of first sensor stored in buffer.
             sensed_pose = self.buffer.get_current_pose(input_channel="first")
 
-            possible_states = dict()
+            possible_states = {}
             evidences = get_scaled_evidences(self.get_all_evidences())
             for graph_id in evidences.keys():
                 interesting_hyp = np.where(
@@ -726,7 +726,7 @@ class EvidenceGraphLM(GraphLM):
         """
         poses = self.possible_poses.copy()
         if as_euler:
-            all_poses = dict()
+            all_poses = {}
             for obj in poses.keys():
                 euler_poses = []
                 for pose in poses[obj]:
@@ -1078,8 +1078,8 @@ class EvidenceGraphLM(GraphLM):
         assert not np.isnan(np.max(self.evidence[graph_id])), "evidence contains NaN."
         logging.debug(
             f"evidence update for {graph_id} took "
-            f"{np.round(end_time - start_time,2)} seconds."
-            f" New max evidence: {np.round(np.max(self.evidence[graph_id]),3)}"
+            f"{np.round(end_time - start_time, 2)} seconds."
+            f" New max evidence: {np.round(np.max(self.evidence[graph_id]), 3)}"
         )
 
     def _update_evidence_with_vote(self, state_votes, graph_id):
@@ -1168,7 +1168,7 @@ class EvidenceGraphLM(GraphLM):
             The location evidence.
         """
         logging.debug(
-            f"Calculating evidence for {graph_id} using input from " f"{input_channel}"
+            f"Calculating evidence for {graph_id} using input from {input_channel}"
         )
 
         pose_transformed_features = rotate_pose_dependent_features(
@@ -1535,12 +1535,12 @@ class EvidenceGraphLM(GraphLM):
         """
         # TODO H: Make this based on object similarity
         # For now just taking sum of character ids in object name
-        id_feature = sum([ord(i) for i in object_id])
+        id_feature = sum(ord(i) for i in object_id)
         return id_feature
 
     # ------------------------ Helper --------------------------
     def _check_use_features_for_matching(self):
-        use_features = dict()
+        use_features = {}
         for input_channel in self.tolerances.keys():
             if input_channel not in self.feature_weights.keys():
                 use_features[input_channel] = False
@@ -1556,7 +1556,7 @@ class EvidenceGraphLM(GraphLM):
     def _fill_feature_weights_with_default(self, default):
         for input_channel in self.tolerances.keys():
             if input_channel not in self.feature_weights.keys():
-                self.feature_weights[input_channel] = dict()
+                self.feature_weights[input_channel] = {}
             for key in self.tolerances[input_channel].keys():
                 if key not in self.feature_weights[input_channel].keys():
                     if hasattr(self.tolerances[input_channel][key], "shape"):
@@ -1596,7 +1596,7 @@ class EvidenceGraphLM(GraphLM):
         all_possible_locations = np.zeros((1, 3))
         all_possible_rotations = np.zeros((1, 3, 3))
 
-        logging.debug("Determining possible poses using input from " f"{input_channel}")
+        logging.debug(f"Determining possible poses using input from {input_channel}")
         node_directions = self.graph_memory.get_rotation_features_at_all_nodes(
             graph_id, input_channel
         )
@@ -1738,7 +1738,7 @@ class EvidenceGraphLM(GraphLM):
                 mlh["graph_id"] = "new_object0"
             logging.info(
                 f"current most likely hypothesis: {mlh['graph_id']} "
-                f"with evidence {np.round(mlh['evidence'],2)}"
+                f"with evidence {np.round(mlh['evidence'], 2)}"
             )
         return mlh
 
@@ -1763,9 +1763,9 @@ class EvidenceGraphLM(GraphLM):
         ) and self.evidence_update_threshold.endswith("%"):
             percentage_str = self.evidence_update_threshold.strip("%")
             percentage = float(percentage_str)
-            assert (
-                percentage >= 0 and percentage <= 100
-            ), "Percentage must be between 0 and 100"
+            assert percentage >= 0 and percentage <= 100, (
+                "Percentage must be between 0 and 100"
+            )
             max_global_evidence = self.current_mlh["evidence"]
             x_percent_of_max = max_global_evidence * (percentage / 100)
             return max_global_evidence - x_percent_of_max
@@ -1864,7 +1864,7 @@ class EvidenceGraphMemory(GraphMemory):
             graph_id: id of graph that should be added
 
         """
-        self.models_in_memory[graph_id] = dict()
+        self.models_in_memory[graph_id] = {}
         for input_channel in model.keys():
             channel_model = model[input_channel]
             try:
@@ -1919,7 +1919,7 @@ class EvidenceGraphMemory(GraphMemory):
             model.build_model(locations=locations, features=features)
 
             if graph_id not in self.models_in_memory:
-                self.models_in_memory[graph_id] = dict()
+                self.models_in_memory[graph_id] = {}
             self.models_in_memory[graph_id][input_channel] = model
 
             logging.info(f"Added new graph with id {graph_id} to memory.")
