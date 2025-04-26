@@ -188,7 +188,7 @@ class GraphObjectModel(ObjectModel):
         old_points = self.pos
         feature_mapping = self.feature_mapping
 
-        all_features = dict()
+        all_features = {}
 
         # Iterate through the different feature types, stacking on (i.e. appending)
         # those features associated w/ candidate new points to the old-graph point
@@ -258,7 +258,7 @@ class GraphObjectModel(ObjectModel):
         )
         num_nodes = locations_reduced.shape[0]
         node_features = np.linspace(0, num_nodes - 1, num_nodes).reshape((num_nodes, 1))
-        feature_mapping = dict()
+        feature_mapping = {}
         feature_mapping["node_ids"] = [0, 1]
 
         for feature_id in features.keys():
@@ -563,7 +563,7 @@ class GridObjectModel(GraphObjectModel):
         if percent_in_bounds < 0.9:
             logging.info(
                 "Too many observations outside of grid "
-                f"({np.round(percent_in_bounds*100,2)}%). Skipping update of grids."
+                f"({np.round(percent_in_bounds * 100, 2)}%). Skipping update of grids."
             )
             raise GridTooSmallError
         voxel_ids_of_new_obs = location_grid_ids[locations_in_bounds]
@@ -705,7 +705,7 @@ class GridObjectModel(GraphObjectModel):
             feature_mapping: Dictionary with feature names as keys and their
                 corresponding indices in feature_array as values.
         """
-        feature_mapping = dict()
+        feature_mapping = {}
         feature_array = None
         for feature in feature_dict.keys():
             feats = feature_dict[feature]

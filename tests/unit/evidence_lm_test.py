@@ -35,9 +35,9 @@ from tbp.monty.frameworks.config_utils.config_args import (
     TwoLMStackedMontyConfig,
 )
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
-    EnvironmentDataLoaderPerObjectEvalArgs,
-    EnvironmentDataLoaderPerObjectTrainArgs,
     ExperimentArgs,
+    InformedEnvironmentDataLoaderEvalArgs,
+    InformedEnvironmentDataLoaderTrainArgs,
     PredefinedObjectInitializer,
 )
 from tbp.monty.frameworks.config_utils.policy_setup_utils import (
@@ -67,6 +67,9 @@ from tbp.monty.simulators.habitat.configs import (
     NoisyPatchViewFinderMountHabitatDatasetArgs,
     PatchViewFinderMountHabitatDatasetArgs,
     TwoLMStackedDistantMountHabitatDatasetArgs,
+)
+from tests.unit.feature_flags import (
+    create_config_with_get_good_view_positioning_procedure,
 )
 from tests.unit.resources.unit_test_utils import BaseGraphTestCases
 
@@ -164,12 +167,12 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
                 env_init_args=EnvInitArgsPatchViewMount(data_path=None).__dict__,
             ),
             train_dataloader_class=ED.InformedEnvironmentDataLoader,
-            train_dataloader_args=EnvironmentDataLoaderPerObjectTrainArgs(
+            train_dataloader_args=InformedEnvironmentDataLoaderTrainArgs(
                 object_names=["capsule3DSolid", "cubeSolid"],
                 object_init_sampler=PredefinedObjectInitializer(),
             ),
             eval_dataloader_class=ED.InformedEnvironmentDataLoader,
-            eval_dataloader_args=EnvironmentDataLoaderPerObjectEvalArgs(
+            eval_dataloader_args=InformedEnvironmentDataLoaderEvalArgs(
                 object_names=["capsule3DSolid"],
                 object_init_sampler=PredefinedObjectInitializer(),
             ),
@@ -211,7 +214,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
                 learning_module_configs=default_evidence_lm_config,
             ),
             train_dataloader_class=ED.InformedEnvironmentDataLoader,
-            train_dataloader_args=EnvironmentDataLoaderPerObjectTrainArgs(
+            train_dataloader_args=InformedEnvironmentDataLoaderTrainArgs(
                 object_names=["capsule3DSolid"],
                 object_init_sampler=PredefinedObjectInitializer(
                     rotations=[[0, 0, 0]],
@@ -829,9 +832,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             exp.train()
             pprint("...loading and checking train statistics...")
 
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             self.check_train_results(train_stats)
 
             pprint("...evaluating...")
@@ -938,12 +939,11 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
         self.assertEqual(
             num_matching_steps,
             sum(
-                exp.model.learning_modules[0].buffer.features["patch"][
-                    "on_object"
-                ][:num_matching_steps]
+                exp.model.learning_modules[0].buffer.features["patch"]["on_object"][
+                    :num_matching_steps
+                ]
             ),
-            "Number of match steps does not match with stored observations"
-            " on object",
+            "Number of match steps does not match with stored observations on object",
         )
         # Since min_train_steps==12 we should have taken 13 steps.
         self.assertEqual(
@@ -961,12 +961,8 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
         )
 
         self.assertGreater(
-            exp.model.learning_modules[0].buffer.stats["current_mlh"][-1][
-                "evidence"
-            ],
-            exp.model.learning_modules[0].buffer.stats["current_mlh"][6][
-                "evidence"
-            ],
+            exp.model.learning_modules[0].buffer.stats["current_mlh"][-1]["evidence"],
+            exp.model.learning_modules[0].buffer.stats["current_mlh"][6]["evidence"],
             "evidence should have increased after moving back on the object.",
         )
 
@@ -977,9 +973,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             pprint("...training...")
             exp.train()
             pprint("...check time out logging...")
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             self.assertEqual(
                 train_stats["individual_ts_performance"][0],
                 "no_match",
@@ -990,7 +984,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
                 self.assertEqual(
                     train_stats["individual_ts_performance"][i + 1],
                     "time_out",
-                    f"time out not recognized/logged correctly in episode {i+1}",
+                    f"time out not recognized/logged correctly in episode {i + 1}",
                 )
             self.assertEqual(
                 train_stats["primary_performance"][2],
@@ -1094,9 +1088,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             exp.train()
             pprint("...loading and checking train statistics...")
 
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             print(train_stats)
             self.check_train_results(train_stats)
 
@@ -1117,9 +1109,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             exp.train()
             pprint("...loading and checking train statistics...")
 
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             print(train_stats)
             self.check_train_results(train_stats)
 
@@ -1421,9 +1411,9 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
         first_input_channel = graph_lm.get_input_channels_in_graph(target_object)[0]
         target_loc = target_graph[first_input_channel].pos[target_loc_id]
 
-        assert np.all(
-            np.isclose(target_loc, self.fake_obs_house[4].location)
-        ), "Should propose testing 5th (indexed from 0) location on object"
+        assert np.all(np.isclose(target_loc, self.fake_obs_house[4].location)), (
+            "Should propose testing 5th (indexed from 0) location on object"
+        )
 
     def test_hypothesis_testing_proposal_for_id(self):
         """Test that the LM correctly predicts a location on a graph to test.
@@ -1697,9 +1687,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             exp.train()
             pprint("...loading and checking train statistics...")
 
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             self.check_train_results(train_stats)
 
             pprint("...evaluating...")
@@ -1718,9 +1706,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             pprint("...training...")
             exp.train()
 
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             print(train_stats)
             self.check_train_results(train_stats, num_lms=5)
 
@@ -1731,9 +1717,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
                 exp.run_epoch()
             exp.logger_handler.post_eval(exp.logger_args)
             pprint("...loading and checking eval statistics...")
-            eval_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "eval_stats.csv")
-            )
+            eval_stats = pd.read_csv(os.path.join(exp.output_dir, "eval_stats.csv"))
             self.check_eval_results(eval_stats, num_lms=5)
 
             pprint("checking that evaluation also works with larger mmd.")
@@ -1755,9 +1739,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             pprint("...training...")
             exp.train()
 
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             self.check_multilm_train_results(train_stats, num_lms=5, min_done=3)
             # Same as in previous test we make it a bit more difficult during eval
             for lm in exp.model.learning_modules:
@@ -1784,9 +1766,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             pprint("...training...")
 
             exp.train()
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             # Just checking that objects are still recognized correctly when moving off
             # the object.
             self.check_train_results(train_stats, num_lms=5)
@@ -1829,8 +1809,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             self.assertEqual(
                 eval_stats["monty_matching_steps"][row],
                 13,
-                "All eval episodes should have recognized the object "
-                "after 13 steps.",
+                "All eval episodes should have recognized the object after 13 steps.",
             )
         for lm_id in [0, 2, 3, 4]:
             self.assertLess(
@@ -1884,13 +1863,10 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
                 self.assertNotIn(
                     key,
                     exp.model.learning_modules[0].buffer.stats.keys(),
-                    f"{key} should not be stored in buffer when using "
-                    f"BASIC logging.",
+                    f"{key} should not be stored in buffer when using BASIC logging.",
                 )
             self.assertEqual(
-                len(
-                    exp.model.learning_modules[0].buffer.stats["possible_matches"]
-                ),
+                len(exp.model.learning_modules[0].buffer.stats["possible_matches"]),
                 1,
                 "When using basic logging we don't append stats for every step.",
             )
@@ -1907,9 +1883,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             exp.train()
             pprint("...loading and checking train statistics...")
 
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             self.check_train_results(train_stats, num_lms=5)
 
             pprint("...evaluating...")
@@ -1932,9 +1906,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             exp.train()
             pprint("...loading and checking train statistics...")
 
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             self.check_train_results(train_stats, num_lms=5)
 
             pprint("...evaluating...")
@@ -1954,9 +1926,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             exp.train()
             pprint("...loading and checking train statistics...")
 
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             self.check_train_results(train_stats, num_lms=5)
 
             pprint("...evaluating...")
@@ -1983,9 +1953,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             exp.train()
             pprint("...loading and checking train statistics...")
 
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             # NOTE: This might fail if the model becomes more noise robust or
             # better able to deal with few incomplete objects in memory.
             for i in range(6):
@@ -2025,9 +1993,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
             exp.train()
             pprint("...loading and checking train statistics...")
 
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             # NOTE: This might fail if the model becomes more noise robust or
             # better able to deal with few incomplete objects in memory.
             for i in range(6):
@@ -2093,9 +2059,7 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
         with MontyObjectRecognitionExperiment(config) as exp:
             pprint("...training...")
             exp.train()
-            train_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "train_stats.csv")
-            )
+            train_stats = pd.read_csv(os.path.join(exp.output_dir, "train_stats.csv"))
             self.check_hierarchical_lm_train_results(train_stats)
 
             models = load_models_from_dir(exp.output_dir)
@@ -2103,10 +2067,91 @@ class EvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
 
             pprint("...evaluating...")
             exp.evaluate()
-            eval_stats = pd.read_csv(
-                os.path.join(exp.output_dir, "eval_stats.csv")
-            )
+            eval_stats = pd.read_csv(os.path.join(exp.output_dir, "eval_stats.csv"))
             self.check_hierarchical_lm_eval_results(eval_stats)
+
+
+class EvidenceLMTestWithGetGoodViewPositioningProcedure(EvidenceLMTest):
+    def setUp(self):
+        super().setUp()
+        self.evidence_config = create_config_with_get_good_view_positioning_procedure(
+            self.evidence_config
+        )
+        self.fixed_actions_evidence = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.fixed_actions_evidence
+            )
+        )
+        self.evidence_tests_off_object = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.evidence_tests_off_object
+            )
+        )
+        self.evidence_tests_time_out = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.evidence_tests_time_out
+            )
+        )
+        self.evidence_test_uniform_initial_poses = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.evidence_test_uniform_initial_poses
+            )
+        )
+        self.fixed_possible_poses_evidence = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.fixed_possible_poses_evidence
+            )
+        )
+        self.no_features_evidence = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.no_features_evidence
+            )
+        )
+        self.no_multithreding_5lm_evidence = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.no_multithreding_5lm_evidence
+            )
+        )
+        self.evidence_5lm_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.evidence_5lm_config
+            )
+        )
+        self.evidence_5lm_basic_logging = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.evidence_5lm_basic_logging
+            )
+        )
+        self.evidence_5lm_3done_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.evidence_5lm_3done_config
+            )
+        )
+        self.evidence_5lm_off_object_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.evidence_5lm_off_object_config
+            )
+        )
+        self.maxnn1_5lm_evidence = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.maxnn1_5lm_evidence
+            )
+        )
+        self.bounded_evidence_5lm_evidence = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.bounded_evidence_5lm_evidence
+            )
+        )
+        self.noise_mixin_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.noise_mixin_config
+            )
+        )
+        self.two_lms_heterarchy_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.two_lms_heterarchy_config
+            )
+        )
 
 
 if __name__ == "__main__":

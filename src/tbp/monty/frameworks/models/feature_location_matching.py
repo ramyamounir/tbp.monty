@@ -118,7 +118,7 @@ class FeatureGraphLM(GraphLM):
         """
         possible_matches = self.get_possible_matches()
         all_objects = self.get_all_known_object_ids()
-        object_id_vote = dict()
+        object_id_vote = {}
         for obj in all_objects:
             object_id_vote[obj] = obj in possible_matches
         logging.info(
@@ -194,7 +194,7 @@ class FeatureGraphLM(GraphLM):
                             self.possible_poses[possible_obj].pop(path_id)
                             removed_locations = np.vstack([removed_locations, location])
                     logging.info(
-                        f"removed {removed_locations.shape[0]-1} locations from "
+                        f"removed {removed_locations.shape[0] - 1} locations from "
                         f"possible matches for {possible_obj}"
                     )
                     # NOTE: could also use votes to add hypotheses -> increase
@@ -341,7 +341,7 @@ class FeatureGraphLM(GraphLM):
         Args:
             query: current features at location.
         """
-        consistent_objects = dict()
+        consistent_objects = {}
         for graph_id in self.possible_matches:
             consistent = self._update_matches_using_features(
                 query[0], query[1], graph_id
@@ -424,13 +424,13 @@ class FeatureGraphLM(GraphLM):
             self.possible_poses[graph_id] = new_possible_poses
             if len(self.possible_poses[graph_id]) < 10:
                 logging.info(
-                    f"possible poses after matching for \
-                        {graph_id}: {self.get_possible_poses()[graph_id]}"
+                    f"possible poses after matching for "
+                    f"{graph_id}: {self.get_possible_poses()[graph_id]}"
                 )
         self.possible_paths[graph_id] = new_possible_paths
         logging.debug(
-            f"possible paths after matching for \
-                {graph_id}: {len(self.possible_paths[graph_id])}"
+            f"possible paths after matching for "
+            f"{graph_id}: {len(self.possible_paths[graph_id])}"
         )
         return len(self.possible_paths[graph_id]) > 0
 
