@@ -45,10 +45,10 @@ from tbp.monty.frameworks.config_utils.config_args import (
     SurfaceAndViewMontyConfig,
 )
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
-    EnvironmentDataloaderMultiObjectArgs,
-    EnvironmentDataLoaderPerObjectEvalArgs,
-    EnvironmentDataLoaderPerObjectTrainArgs,
     ExperimentArgs,
+    InformedEnvironmentDataLoaderEvalArgs,
+    InformedEnvironmentDataloaderMultiObjectArgs,
+    InformedEnvironmentDataLoaderTrainArgs,
     PredefinedObjectInitializer,
 )
 from tbp.monty.frameworks.config_utils.policy_setup_utils import (
@@ -84,6 +84,9 @@ from tbp.monty.simulators.habitat.configs import (
     PatchViewFinderMultiObjectMountHabitatDatasetArgs,
     SurfaceViewFinderMountHabitatDatasetArgs,
 )
+from tests.unit.feature_flags import (
+    create_config_with_get_good_view_positioning_procedure,
+)
 
 
 class PolicyTest(unittest.TestCase):
@@ -111,12 +114,12 @@ class PolicyTest(unittest.TestCase):
                 env_init_args=EnvInitArgsPatchViewMount(data_path=None).__dict__,
             ),
             train_dataloader_class=ED.InformedEnvironmentDataLoader,
-            train_dataloader_args=EnvironmentDataLoaderPerObjectTrainArgs(
+            train_dataloader_args=InformedEnvironmentDataLoaderTrainArgs(
                 object_names=["cubeSolid", "capsule3DSolid"],
                 object_init_sampler=PredefinedObjectInitializer(),
             ),
             eval_dataloader_class=ED.InformedEnvironmentDataLoader,
-            eval_dataloader_args=EnvironmentDataLoaderPerObjectEvalArgs(
+            eval_dataloader_args=InformedEnvironmentDataLoaderEvalArgs(
                 object_names=["cubeSolid"],
                 object_init_sampler=PredefinedObjectInitializer(),
             ),
@@ -281,7 +284,7 @@ class PolicyTest(unittest.TestCase):
             self.base_dist_agent_config
         )
         self.poor_initial_view_dist_agent_config.update(
-            train_dataloader_args=EnvironmentDataLoaderPerObjectTrainArgs(
+            train_dataloader_args=InformedEnvironmentDataLoaderTrainArgs(
                 object_names=["cubeSolid"],
                 object_init_sampler=PredefinedObjectInitializer(
                     positions=[[0.0, 1.5, -0.2]]  # Object is farther away than typical
@@ -339,7 +342,7 @@ class PolicyTest(unittest.TestCase):
                     data_path=None
                 ).__dict__,
             ),
-            eval_dataloader_args=EnvironmentDataloaderMultiObjectArgs(
+            eval_dataloader_args=InformedEnvironmentDataloaderMultiObjectArgs(
                 object_names=dict(
                     targets_list=["cubeSolid"],
                     source_object_list=["cubeSolid", "capsule3DSolid"],
@@ -372,7 +375,7 @@ class PolicyTest(unittest.TestCase):
             self.poor_initial_view_dist_agent_config
         )
         self.rotated_cube_view_config.update(
-            train_dataloader_args=EnvironmentDataLoaderPerObjectTrainArgs(
+            train_dataloader_args=InformedEnvironmentDataLoaderTrainArgs(
                 object_names=["cubeSolid"],
                 object_init_sampler=PredefinedObjectInitializer(
                     positions=[[-0.1, 1.5, -0.2]],
@@ -743,8 +746,8 @@ class PolicyTest(unittest.TestCase):
 
             # Utility policy should not have moved too close to the object
             assert closest_point_on_target_obj > target_closest_point, (
-                f"Initial view is too close to target, {closest_point_on_target_obj} "
-                f"vs target of {target_closest_point}"
+                f"Initial view is too close to target, {closest_point_on_target_obj}"
+                f" vs target of {target_closest_point}"
             )
 
             # Also calculate closest point on *any* object so that we don't get
@@ -1426,6 +1429,74 @@ class PolicyTest(unittest.TestCase):
         assert np.all(
             np.isclose(agent_direction_hab_3, [-0.965738, 0.09413407, -0.24184476])
         ), "Habitat pose is not as expected"
+
+
+class PolicyTestWithGetGoodViewPositioningProcedure(PolicyTest):
+    def setUp(self):
+        super().setUp()
+        self.base_dist_agent_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.base_dist_agent_config
+            )
+        )
+        self.spiral_config = create_config_with_get_good_view_positioning_procedure(
+            self.spiral_config
+        )
+        self.dist_agent_hypo_driven_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.dist_agent_hypo_driven_config
+            )
+        )
+        self.base_surf_agent_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.base_surf_agent_config
+            )
+        )
+        self.curv_informed_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.curv_informed_config
+            )
+        )
+        self.surf_agent_hypo_driven_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.surf_agent_hypo_driven_config
+            )
+        )
+        self.dist_agent_hypo_driven_multi_lm_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.dist_agent_hypo_driven_multi_lm_config
+            )
+        )
+        self.fixed_action_distant_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.fixed_action_distant_config
+            )
+        )
+        self.fixed_action_surface_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.fixed_action_surface_config
+            )
+        )
+        self.poor_initial_view_dist_agent_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.poor_initial_view_dist_agent_config
+            )
+        )
+        self.poor_initial_view_surf_agent_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.poor_initial_view_surf_agent_config
+            )
+        )
+        self.poor_initial_view_multi_object_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.poor_initial_view_multi_object_config
+            )
+        )
+        self.rotated_cube_view_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.rotated_cube_view_config
+            )
+        )
 
 
 if __name__ == "__main__":

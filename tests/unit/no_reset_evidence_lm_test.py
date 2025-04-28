@@ -23,9 +23,9 @@ from tbp.monty.frameworks.config_utils.config_args import (
     PretrainLoggingConfig,
 )
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
-    EnvironmentDataLoaderPerObjectEvalArgs,
-    EnvironmentDataLoaderPerObjectTrainArgs,
     ExperimentArgs,
+    InformedEnvironmentDataLoaderEvalArgs,
+    InformedEnvironmentDataLoaderTrainArgs,
     PredefinedObjectInitializer,
 )
 from tbp.monty.frameworks.environments import embodied_data as ED
@@ -44,6 +44,9 @@ from tbp.monty.frameworks.models.no_reset_evidence_matching import (
 from tbp.monty.simulators.habitat.configs import (
     EnvInitArgsPatchViewMount,
     PatchViewFinderMountHabitatDatasetArgs,
+)
+from tests.unit.feature_flags import (
+    create_config_with_get_good_view_positioning_procedure,
 )
 from tests.unit.resources.unit_test_utils import BaseGraphTestCases
 
@@ -102,7 +105,7 @@ class NoResetEvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
                 env_init_args=EnvInitArgsPatchViewMount(data_path=None).__dict__,
             ),
             train_dataloader_class=ED.InformedEnvironmentDataLoader,
-            train_dataloader_args=EnvironmentDataLoaderPerObjectTrainArgs(
+            train_dataloader_args=InformedEnvironmentDataLoaderTrainArgs(
                 object_names=["capsule3DSolid", "cubeSolid"],
                 object_init_sampler=PredefinedObjectInitializer(),
             ),
@@ -128,12 +131,12 @@ class NoResetEvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
                 env_init_args=EnvInitArgsPatchViewMount(data_path=None).__dict__,
             ),
             train_dataloader_class=ED.InformedEnvironmentDataLoader,
-            train_dataloader_args=EnvironmentDataLoaderPerObjectTrainArgs(
+            train_dataloader_args=InformedEnvironmentDataLoaderTrainArgs(
                 object_names=["capsule3DSolid", "cubeSolid"],
                 object_init_sampler=PredefinedObjectInitializer(),
             ),
             eval_dataloader_class=ED.InformedEnvironmentDataLoader,
-            eval_dataloader_args=EnvironmentDataLoaderPerObjectEvalArgs(
+            eval_dataloader_args=InformedEnvironmentDataLoaderEvalArgs(
                 object_names=["capsule3DSolid"],
                 object_init_sampler=PredefinedObjectInitializer(),
             ),
@@ -218,6 +221,21 @@ class NoResetEvidenceLMTest(BaseGraphTestCases.BaseGraphTest):
 
     def tearDown(self):
         shutil.rmtree(self.output_dir)
+
+
+class NoResetEvidenceLMTestWithGetGoodViewPositioningProcedure(NoResetEvidenceLMTest):
+    def setUp(self):
+        super().setUp()
+        self.pretraining_configs = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.pretraining_configs
+            )
+        )
+        self.unsupervised_evidence_config = (
+            create_config_with_get_good_view_positioning_procedure(
+                self.unsupervised_evidence_config
+            )
+        )
 
 
 if __name__ == "__main__":

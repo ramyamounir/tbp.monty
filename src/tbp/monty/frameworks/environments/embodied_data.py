@@ -17,13 +17,17 @@ import numpy as np
 import quaternion
 from torch.utils.data import Dataset
 
+from tbp.monty.frameworks.actions.action_samplers import UniformlyDistributedSampler
 from tbp.monty.frameworks.actions.actions import (
     Action,
+    LookUp,
     MoveTangentially,
     SetAgentPose,
     SetSensorRotation,
 )
 from tbp.monty.frameworks.models.motor_policies import (
+    GetGoodView,
+    InformedPolicy,
     SurfacePolicy,
 )
 from tbp.monty.frameworks.models.motor_system import MotorSystem
@@ -433,8 +437,18 @@ class InformedEnvironmentDataLoader(EnvironmentDataLoaderPerObject):
     iv) Supports hypothesis-testing "jump" policy
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self, use_get_good_view_positioning_procedure: bool = False, *args, **kwargs
+    ):
         super(InformedEnvironmentDataLoader, self).__init__(*args, **kwargs)
+        self._use_get_good_view_positioning_procedure = (
+            use_get_good_view_positioning_procedure
+        )
+        """Feature flag to use the GetGoodView positioning procedure.
+
+        This is a temporary feature flag to allow for testing the GetGoodView
+        positioning procedure.
+        """
 
     def __iter__(self):
         # Overwrite original because we don't want to reset agent at this stage
@@ -452,7 +466,8 @@ class InformedEnvironmentDataLoader(EnvironmentDataLoaderPerObject):
         # Check if any LM's have output a goal-state (such as hypothesis-testing
         # goal-state)
         elif (
-            self.motor_system._policy.use_goal_state_driven_actions
+            isinstance(self.motor_system._policy, InformedPolicy)
+            and self.motor_system._policy.use_goal_state_driven_actions
             and self.motor_system._policy.driving_goal_state is not None
         ):
             return self.execute_jump_attempt()
@@ -576,6 +591,51 @@ class InformedEnvironmentDataLoader(EnvironmentDataLoaderPerObject):
         TODO M : move most of this to the motor systems, shouldn't be in embodied_data
             class
         """
+        if self._use_get_good_view_positioning_procedure:
+            _configured_policy = self.motor_system._policy
+
+            self.motor_system._policy = GetGoodView(
+                agent_id=self.motor_system._policy.agent_id,
+                desired_object_distance=_configured_policy.desired_object_distance,
+                good_view_percentage=_configured_policy.good_view_percentage,
+                multiple_objects_present=self.num_distractors > 0,
+                sensor_id=sensor_id,
+                target_semantic_id=self.primary_target["semantic_id"],
+                allow_translation=allow_translation,
+                max_orientation_attempts=max_orientation_attempts,
+                # TODO: Remaining arguments are unused but required by BasePolicy.
+                #       These will be removed when PositioningProcedure is split from
+                #       BasePolicy
+                #
+                # Note that if we use rng=self.rng below, then the following test will
+                # fail:
+                #   tests/unit/evidence_lm_test.py::EvidenceLMTest::test_two_lm_heterarchy_experiment  # noqa: E501
+                # The test result seems to be coupled to the random seed and the
+                # specific sequence of rng calls (rng is called once on GetGoodView
+                # initialization).
+                rng=np.random.RandomState(),
+                action_sampler_args=dict(actions=[LookUp]),
+                action_sampler_class=UniformlyDistributedSampler,
+                switch_frequency=0.0,
+            )
+            result = self.motor_system._policy.positioning_call(
+                self._observation, self.motor_system._state
+            )
+            while not result.terminated and not result.truncated:
+                for action in result.actions:
+                    self._observation, proprio_state = self.dataset[action]
+                    self.motor_system._state = (
+                        MotorSystemState(proprio_state) if proprio_state else None
+                    )
+
+                result = self.motor_system._policy.positioning_call(
+                    self._observation, self.motor_system._state
+                )
+
+            self.motor_system._policy = _configured_policy
+
+            return result.success
+
         # TODO break up this method so that there is less code duplication
         # Start by ensuring the center of the patch is covering the primary target
         # object before we start moving forward; only done for multi-object experiments
