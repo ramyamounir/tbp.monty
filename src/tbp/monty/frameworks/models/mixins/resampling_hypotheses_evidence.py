@@ -9,7 +9,7 @@
 
 import logging
 import time
-from typing import Any
+from typing import Any, Dict
 
 import numpy as np
 
@@ -34,9 +34,24 @@ class ResamplingHypothesesEvidenceMixin:
         - EvidenceGraphLM
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self,
+        *args: object,
+        sampling_parameters: Dict[str, float],
+        hypotheses_count_multiplier=1.0,
+        hypotheses_old_to_new_ratio=0.0,
+        hypotheses_informed_to_offspring_ratio=0.0,
+        **kwargs: object,
+    ):
         super().__init__(*args, **kwargs)
         self.evidence_slope = {}
+
+        # sampling parameters
+        self.hypotheses_count_multiplier = hypotheses_count_multiplier
+        self.hypotheses_old_to_new_ratio = hypotheses_old_to_new_ratio
+        self.hypotheses_informed_to_offspring_ratio = (
+            hypotheses_informed_to_offspring_ratio
+        )
 
     def reset(self) -> None:
         super().reset()
@@ -73,13 +88,6 @@ class ResamplingHypothesesEvidenceMixin:
             for ic in features.keys()
             if ic in self.get_input_channels_in_graph(graph_id)
         ]
-
-        if displacements is None and len(input_channels_to_use) == 0:
-            # QUESTION: Do we just want to continue until we get input?
-            raise ValueError(
-                "No input channels found to initializing hypotheses. Make sure"
-                " there is at least one channel that is also stored in the graph."
-            )
 
         for input_channel in input_channels_to_use:
             # Temporary
@@ -152,23 +160,18 @@ class ResamplingHypothesesEvidenceMixin:
 
         ### Update Evidence Slope Here!!
 
-        # parameters
-        hypotheses_count_multiplier = 1.0
-        hypotheses_old_to_new_ratio = 0.0
-        hypotheses_informed_to_offspring_ratio = 0.0
-
         channel_range = self.channel_hypothesis_mapping[graph_id].channel_range(
             input_channel
         )
         current = channel_range[1] - channel_range[0]
 
         # calculate the total number of hypotheses needed
-        needed = current * hypotheses_count_multiplier
+        needed = current * self.hypotheses_count_multiplier
 
         # calculate how many old and new hypotheses needed
         old_maintained, new_sampled = (
-            needed * (1 - hypotheses_old_to_new_ratio),
-            needed * hypotheses_old_to_new_ratio,
+            needed * (1 - self.hypotheses_old_to_new_ratio),
+            needed * self.hypotheses_old_to_new_ratio,
         )
         # needed old hypotheses should not exceed the existing hypotheses
         # if trying to maintain more hypotheses, set the available count as ceiling
@@ -178,8 +181,8 @@ class ResamplingHypothesesEvidenceMixin:
 
         # calculate how many informed and offspring hypotheses needed
         new_informed, new_offspring = (
-            new_sampled * (1 - hypotheses_informed_to_offspring_ratio),
-            new_sampled * hypotheses_informed_to_offspring_ratio,
+            new_sampled * (1 - self.hypotheses_informed_to_offspring_ratio),
+            new_sampled * self.hypotheses_informed_to_offspring_ratio,
         )
         # needed informed hypotheses should not exceed the available informed hypotheses
         # if trying to sample more hypotheses, set the available count as ceiling
