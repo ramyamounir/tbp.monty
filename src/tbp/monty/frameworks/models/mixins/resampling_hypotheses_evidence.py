@@ -49,7 +49,7 @@ class ResamplingHypothesesEvidenceMixin:
             TypeError: If the mixin is used with a non-compatible learning module.
         """
         super().__init_subclass__(**kwargs)
-        if not any([issubclass(b, (EvidenceGraphLM)) for b in cls.__bases__]):
+        if not any(issubclass(b, (EvidenceGraphLM)) for b in cls.__bases__):
             raise TypeError(
                 "ResamplingHypothesesEvidenceMixin must be mixed in with a subclass of "
                 f"EvidenceGraphLM, got {cls.__bases__}"
@@ -131,8 +131,8 @@ class ResamplingHypothesesEvidenceMixin:
         assert not np.isnan(np.max(self.evidence[graph_id])), "evidence contains NaN."
         logging.debug(
             f"evidence update for {graph_id} took "
-            f"{np.round(end_time - start_time,2)} seconds."
-            f" New max evidence: {np.round(np.max(self.evidence[graph_id]),3)}"
+            f"{np.round(end_time - start_time, 2)} seconds."
+            f" New max evidence: {np.round(np.max(self.evidence[graph_id]), 3)}"
         )
 
     def _sample_count(self, input_channel, features, graph_id):
@@ -197,7 +197,7 @@ class ResamplingHypothesesEvidenceMixin:
         if informed_count == 0:
             selected_locations = np.zeros((0, 3))
             selected_rotations = np.zeros((0, 3, 3))
-            selected_evidence = np.zeros((0))
+            selected_evidence = np.zeros(0)
         else:
             (
                 initial_possible_channel_locations,
@@ -218,11 +218,10 @@ class ResamplingHypothesesEvidenceMixin:
         return selected_locations, selected_rotations, selected_evidence
 
     def _sample_old(self, features, graph_id, old_count, input_channel):
-
         if old_count == 0:
             selected_locations = np.zeros((0, 3))
             selected_rotations = np.zeros((0, 3, 3))
-            selected_evidence = np.zeros((0))
+            selected_evidence = np.zeros(0)
         else:
             selected_locations = self.possible_locations[graph_id][:old_count]
             selected_rotations = self.possible_poses[graph_id][:old_count]
@@ -240,7 +239,6 @@ class ResamplingHypothesesEvidenceMixin:
         graph_id,
         input_channel,
     ):
-
         evidence_threshold = self._get_evidence_update_threshold(graph_id)
 
         rotated_displacements = rotations.dot(displacement[input_channel])
@@ -400,4 +398,3 @@ class ResamplingHypothesesEvidenceMixin:
             self.channel_hypothesis_mapping[graph_id].resize_channel_by(
                 input_channel, len(new_evidence) - channel_size
             )
-
