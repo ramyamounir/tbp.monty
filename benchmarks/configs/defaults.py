@@ -11,8 +11,12 @@ import os
 
 import numpy as np
 
-from tbp.monty.frameworks.models.evidence_matching import EvidenceGraphLM
 from tbp.monty.frameworks.models.goal_state_generation import EvidenceGoalStateGenerator
+
+# from tbp.monty.frameworks.models.evidence_matching import EvidenceGraphLM
+from tbp.monty.frameworks.models.mixins.resampling_hypotheses_evidence import (
+    ResamplingEvidenceGraphLM,
+)
 from tbp.monty.frameworks.models.sensor_modules import FeatureChangeSM
 
 default_all_noise_params = {
@@ -67,7 +71,7 @@ default_tolerances = {
 }  # features where weight is not specified default weight to 1
 
 default_evidence_lm_config = dict(
-    learning_module_class=EvidenceGraphLM,
+    learning_module_class=ResamplingEvidenceGraphLM,
     learning_module_args=dict(
         # mmd of 0.015 get higher performance but slower run time
         max_match_distance=0.01,  # =1cm
