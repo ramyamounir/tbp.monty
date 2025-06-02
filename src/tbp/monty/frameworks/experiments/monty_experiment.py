@@ -34,7 +34,6 @@ from tbp.monty.frameworks.models.abstract_monty_classes import (
     LearningModule,
     SensorModule,
 )
-from tbp.monty.frameworks.models.monty_base import MontyBase
 from tbp.monty.frameworks.models.motor_policies import MotorPolicy
 from tbp.monty.frameworks.models.motor_system import MotorSystem
 from tbp.monty.frameworks.utils.dataclass_utils import (
@@ -398,23 +397,15 @@ class MontyExperiment:
         # TODO: only defined for MontyForGraphMatching right now, need to add TM later
         # NOTE: later, more levels that Basic or Detailed could be added
 
-        if isinstance(self.model, MontyBase):
-            if self.monty_log_level in self.model.LOGGING_REGISTRY:
-                logger_class = self.model.LOGGING_REGISTRY[self.monty_log_level]
-                self.monty_logger = logger_class(handlers=monty_handlers)
-
-            else:
-                logging.warning(
-                    "Unable to match monty logger to log level"
-                    "An empty logger will be used as a placeholder"
-                )
-                self.monty_logger = BaseMontyLogger(handlers=[])
+        if self.monty_log_level in self.model.LOGGING_REGISTRY:
+            logger_class = self.model.LOGGING_REGISTRY[self.monty_log_level]
+            self.monty_logger = logger_class(handlers=monty_handlers)
         else:
-            raise (
-                NotImplementedError,
-                "Please implement a mapping from monty_log_level to a logger class"
-                f"for models of type {type(self.model)}",
+            logging.warning(
+                "Unable to match monty logger to log level"
+                "An empty logger will be used as a placeholder"
             )
+            self.monty_logger = BaseMontyLogger(handlers=[])
 
         if "log_parallel_wandb" in all_logging_args.keys():
             self.monty_logger.use_parallel_wandb_logging = all_logging_args[
@@ -466,7 +457,7 @@ class MontyExperiment:
         self.dataloader.pre_episode()
 
         self.max_steps = self.max_train_steps
-        if not self.model.experiment_mode == "train":
+        if self.model.experiment_mode != "train":
             self.max_steps = self.max_eval_steps
 
         self.logger_handler.pre_episode(self.logger_args)
@@ -523,7 +514,7 @@ class MontyExperiment:
     def pre_epoch(self):
         """Set dataloader and call sub pre_epoch functions."""
         self.dataloader = self.train_dataloader
-        if not self.model.experiment_mode == "train":
+        if self.model.experiment_mode != "train":
             self.dataloader = self.eval_dataloader
 
         self.dataloader.pre_epoch()

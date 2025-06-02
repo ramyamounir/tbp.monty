@@ -45,10 +45,10 @@ from tbp.monty.frameworks.config_utils.config_args import (
     SurfaceAndViewMontyConfig,
 )
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
+    EnvironmentDataloaderMultiObjectArgs,
+    EnvironmentDataLoaderPerObjectEvalArgs,
+    EnvironmentDataLoaderPerObjectTrainArgs,
     ExperimentArgs,
-    InformedEnvironmentDataLoaderEvalArgs,
-    InformedEnvironmentDataloaderMultiObjectArgs,
-    InformedEnvironmentDataLoaderTrainArgs,
     PredefinedObjectInitializer,
 )
 from tbp.monty.frameworks.config_utils.policy_setup_utils import (
@@ -84,9 +84,6 @@ from tbp.monty.simulators.habitat.configs import (
     PatchViewFinderMultiObjectMountHabitatDatasetArgs,
     SurfaceViewFinderMountHabitatDatasetArgs,
 )
-from tests.unit.feature_flags import (
-    create_config_with_get_good_view_positioning_procedure,
-)
 
 
 class PolicyTest(unittest.TestCase):
@@ -114,12 +111,12 @@ class PolicyTest(unittest.TestCase):
                 env_init_args=EnvInitArgsPatchViewMount(data_path=None).__dict__,
             ),
             train_dataloader_class=ED.InformedEnvironmentDataLoader,
-            train_dataloader_args=InformedEnvironmentDataLoaderTrainArgs(
+            train_dataloader_args=EnvironmentDataLoaderPerObjectTrainArgs(
                 object_names=["cubeSolid", "capsule3DSolid"],
                 object_init_sampler=PredefinedObjectInitializer(),
             ),
             eval_dataloader_class=ED.InformedEnvironmentDataLoader,
-            eval_dataloader_args=InformedEnvironmentDataLoaderEvalArgs(
+            eval_dataloader_args=EnvironmentDataLoaderPerObjectEvalArgs(
                 object_names=["cubeSolid"],
                 object_init_sampler=PredefinedObjectInitializer(),
             ),
@@ -284,7 +281,7 @@ class PolicyTest(unittest.TestCase):
             self.base_dist_agent_config
         )
         self.poor_initial_view_dist_agent_config.update(
-            train_dataloader_args=InformedEnvironmentDataLoaderTrainArgs(
+            train_dataloader_args=EnvironmentDataLoaderPerObjectTrainArgs(
                 object_names=["cubeSolid"],
                 object_init_sampler=PredefinedObjectInitializer(
                     positions=[[0.0, 1.5, -0.2]]  # Object is farther away than typical
@@ -342,7 +339,7 @@ class PolicyTest(unittest.TestCase):
                     data_path=None
                 ).__dict__,
             ),
-            eval_dataloader_args=InformedEnvironmentDataloaderMultiObjectArgs(
+            eval_dataloader_args=EnvironmentDataloaderMultiObjectArgs(
                 object_names=dict(
                     targets_list=["cubeSolid"],
                     source_object_list=["cubeSolid", "capsule3DSolid"],
@@ -375,7 +372,7 @@ class PolicyTest(unittest.TestCase):
             self.poor_initial_view_dist_agent_config
         )
         self.rotated_cube_view_config.update(
-            train_dataloader_args=InformedEnvironmentDataLoaderTrainArgs(
+            train_dataloader_args=EnvironmentDataLoaderPerObjectTrainArgs(
                 object_names=["cubeSolid"],
                 object_init_sampler=PredefinedObjectInitializer(
                     positions=[[-0.1, 1.5, -0.2]],
@@ -895,17 +892,116 @@ class PolicyTest(unittest.TestCase):
             for loader_step, observation in enumerate(exp.dataloader):
                 exp.model.step(observation)
 
-                if loader_step == 24:  # Last step we take before getting back onto the
-                    # object
+                #  Step | Action           | Motor-only? | Obs processed? | Source
+                # ------|------------------|-------------|----------------|-------------
+                #  1    | MoveForward      | True        | False          | dynamic_call
+                #  2    | OrientHorizontal | True        | False          | dynamic_call
+                #  3    | OrientVertical   | False       | True           | dynamic_call
+                #  4    | MoveTangentially | True        | False          | dynamic_call
+                #  5    | MoveForward      | True        | False          | dynamic_call
+                #  6    | OrientHorizontal | True        | False          | dynamic_call
+                #  7    | OrientVertical   | False       | True           | dynamic_call
+                #  8    | MoveTangentially | True        | False          | dynamic_call
+                #  9    | MoveForward      | True        | False          | dynamic_call
+                #  10   | OrientHorizontal | True        | False          | dynamic_call
+                #  11   | OrientVertical   | False       | True           | dynamic_call
+                #  12   | MoveTangentially | True        | False          | dynamic_call
+                # falls off object
+                #  13   | OrientHorizontal | True        | False          | touch_object
+                #  14   | OrientHorizontal | True        | False          | touch_object
+                #  15   | OrientHorizontal | True        | False          | touch_object
+                #  16   | OrientHorizontal | True        | False          | touch_object
+                #  17   | OrientHorizontal | True        | False          | touch_object
+                #  18   | OrientHorizontal | True        | False          | touch_object
+                #  19   | OrientHorizontal | True        | False          | touch_object
+                #  20   | OrientHorizontal | True        | False          | touch_object
+                #  21   | OrientHorizontal | True        | False          | touch_object
+                #  22   | OrientHorizontal | True        | False          | touch_object
+                #  23   | OrientHorizontal | True        | False          | touch_object
+                #  24   | OrientHorizontal | True        | False          | touch_object
+                #  25   | OrientVertical   | True        | False          | touch_object
+                # back on object
+                #  26   | OrientHorizontal | True        | False          | dynamic_call
+                #  27   | OrientVertical   | False       | True           | dynamic_call
+                #  28   | MoveTangentially | True        | False          | dynamic_call
+                # falls off object
+                #  29   | OrientHorizontal | True        | False          | touch_object
+                #  30   | OrientHorizontal | True        | False          | touch_object
+                #  31   | OrientHorizontal | True        | False          | touch_object
+                #  32   | OrientHorizontal | True        | False          | touch_object
+                #  33   | OrientHorizontal | True        | False          | touch_object
+                #  34   | OrientHorizontal | True        | False          | touch_object
+                #  35   | OrientHorizontal | True        | False          | touch_object
+                #  36   | OrientHorizontal | True        | False          | touch_object
+                #  37   | OrientHorizontal | True        | False          | touch_object
+                #  38   | OrientHorizontal | True        | False          | touch_object
+                #  39   | OrientHorizontal | True        | False          | touch_object
+                #  40   | OrientHorizontal | True        | False          | touch_object
+                #  41   | OrientVertical   | True        | False          | touch_object
+                #  42   | MoveForward      | True        | False          | touch_object
+                # back on object
+                #  43   | OrientHorizontal | True        | False          | dynamic_call
+                #  44   | OrientVertical   | False       | True           | dynamic_call
+                #  45   | MoveTangentially | True        | False          | dynamic_call
+                # falls off object
+                #  46   | OrientHorizontal | True        | False          | touch_object
+                #  47   | OrientHorizontal | True        | False          | touch_object
+                #  48   | OrientHorizontal | True        | False          | touch_object
+                #  49   | OrientHorizontal | True        | False          | touch_object
+                #  50   | OrientHorizontal | True        | False          | touch_object
+                #  51   | OrientHorizontal | True        | False          | touch_object
+                #  52   | OrientHorizontal | True        | False          | touch_object
+                #  53   | OrientHorizontal | True        | False          | touch_object
+                #  54   | OrientHorizontal | True        | False          | touch_object
+                #  55   | OrientHorizontal | True        | False          | touch_object
+                #  56   | OrientHorizontal | True        | False          | touch_object
+                #  57   | OrientHorizontal | True        | False          | touch_object
+                #  58   | OrientVertical   | True        | False          | touch_object
+                # back on object
+                #  59   | OrientHorizontal | True        | False          | dynamic_call
+                #  60   | OrientVertical   | False       | True           | dynamic_call
+                #  61   | MoveTangentially | True        | False          | dynamic_call
+                # falls off object
+                #  62   | OrientHorizontal | True        | False          | touch_object
+
+                # Motor-only touch_object steps
+                if (
+                    13 <= loader_step <= 25
+                    or 29 <= loader_step <= 42
+                    or 46 <= loader_step <= 58
+                    or loader_step == 62
+                ):
                     assert not exp.model.learning_modules[
                         0
-                    ].buffer.get_last_obs_processed(), "Should be off object"
+                    ].buffer.get_last_obs_processed(), (
+                        "Should be off object, motor-only step"
+                    )
+                if loader_step == 62:
+                    break  # Finish test
 
-                if loader_step == 25:
+                # First on-object steps are always OrientHorizontal motor-only steps
+                if loader_step in [26, 43, 59]:
+                    assert not exp.model.learning_modules[
+                        0
+                    ].buffer.get_last_obs_processed(), (
+                        "Should be on object, motor-only step"
+                    )
+
+                # Second on-object steps are always OrientVertical that send data to LM
+                if loader_step in [27, 44, 60]:
                     assert exp.model.learning_modules[
                         0
-                    ].buffer.get_last_obs_processed(), "Should be back on object"
-                    break  # Don't go into exploratory mode
+                    ].buffer.get_last_obs_processed(), (
+                        "Should be on object, sending data to LM"
+                    )
+
+                # Third on-object steps are always MoveTangentially motor-only steps
+                if loader_step in [28, 45, 61]:
+                    assert not exp.model.learning_modules[
+                        0
+                    ].buffer.get_last_obs_processed(), (
+                        "Should be on object, motor-only step"
+                    )
 
     def test_surface_policy_orientation(self):
         """Test ability of surface agent to orient to a point-normal.
@@ -1429,74 +1525,6 @@ class PolicyTest(unittest.TestCase):
         assert np.all(
             np.isclose(agent_direction_hab_3, [-0.965738, 0.09413407, -0.24184476])
         ), "Habitat pose is not as expected"
-
-
-class PolicyTestWithGetGoodViewPositioningProcedure(PolicyTest):
-    def setUp(self):
-        super().setUp()
-        self.base_dist_agent_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.base_dist_agent_config
-            )
-        )
-        self.spiral_config = create_config_with_get_good_view_positioning_procedure(
-            self.spiral_config
-        )
-        self.dist_agent_hypo_driven_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.dist_agent_hypo_driven_config
-            )
-        )
-        self.base_surf_agent_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.base_surf_agent_config
-            )
-        )
-        self.curv_informed_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.curv_informed_config
-            )
-        )
-        self.surf_agent_hypo_driven_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.surf_agent_hypo_driven_config
-            )
-        )
-        self.dist_agent_hypo_driven_multi_lm_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.dist_agent_hypo_driven_multi_lm_config
-            )
-        )
-        self.fixed_action_distant_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.fixed_action_distant_config
-            )
-        )
-        self.fixed_action_surface_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.fixed_action_surface_config
-            )
-        )
-        self.poor_initial_view_dist_agent_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.poor_initial_view_dist_agent_config
-            )
-        )
-        self.poor_initial_view_surf_agent_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.poor_initial_view_surf_agent_config
-            )
-        )
-        self.poor_initial_view_multi_object_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.poor_initial_view_multi_object_config
-            )
-        )
-        self.rotated_cube_view_config = (
-            create_config_with_get_good_view_positioning_procedure(
-                self.rotated_cube_view_config
-            )
-        )
 
 
 if __name__ == "__main__":
