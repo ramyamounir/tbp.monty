@@ -145,7 +145,7 @@ NUM_ROTATIONS = 1
 OBJECTS_LIST = ["strawberry", "banana"]
 
 # Use False during debugging (with breakpoints) of evidence updates
-USE_MULTITHREADING = True
+USE_MULTITHREADING = False
 
 # Controls the number of evaluation steps for each object
 EVAL_STEPS = 50
