@@ -7,6 +7,8 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT.
 
+from __future__ import annotations
+
 from collections import OrderedDict
 from typing import Dict, List, Optional, Tuple
 from typing import OrderedDict as OrderedDictType
@@ -224,3 +226,186 @@ class ChannelMapper:
         """
         ranges = {ch: self.channel_range(ch) for ch in self.channel_sizes}
         return f"ChannelMapper({ranges})"
+
+
+class EvidenceSlopeTracker:
+    """Tracks the slopes of evidence streams over a sliding window.
+
+    This class maintains a set of hypotheses, each represented by a time series of
+    evidence values. It allows updating these values, computing average slopes, adding
+    and removing hypotheses, and selecting the top-k hypotheses based on their slopes.
+
+    Attributes:
+        window_size (int): The number of past values to consider for each hypothesis.
+        min_age (int): The minimum age required for a hypothesis to be considered valid.
+        data (np.ndarray): A 2D NumPy array storing evidence values for each hypothesis.
+        age (np.ndarray): A 1D NumPy array tracking the number of valid values for each
+            hypothesis.
+    """
+
+    def __init__(self, window_size: int = 3, min_age: int = 0) -> None:
+        """Initializes the Tracker with a given window size and minimum age.
+
+        Args:
+            window_size (int, optional): The size of the sliding window. Defaults to 3.
+            min_age (int, optional): The minimum age required for a hypothesis to be
+            considered valid. Defaults to 2.
+        """
+        self.window_size: int = window_size
+        self.min_age: int = min_age
+        self.data: np.ndarray = np.full(
+            (0, window_size), np.nan
+        )  # Initialize with NaNs
+        self.age: np.ndarray = np.zeros(
+            0, dtype=int
+        )  # Tracks the number of valid values
+
+    @property
+    def total_size(self) -> int:
+        """Returns the total number of tracked hypotheses.
+
+        Returns:
+            int: The number of hypotheses currently stored.
+        """
+        return self.data.shape[0]
+
+    @property
+    def valid_indices_mask(self) -> np.ndarray:
+        """Returns the indices of hypotheses that meet the minimum age requirement.
+
+        Returns:
+            np.ndarray: A boolean array indicating valid hypotheses.
+        """
+        return self.age >= self.min_age
+
+    @property
+    def must_keep_mask(self) -> np.ndarray:
+        """Returns the indices of hypotheses that must be kept.
+
+        Returns:
+            np.ndarray: A boolean array indicating hypotheses that should not be
+            removed.
+        """
+        return self.age < self.min_age
+
+    def update(self, values: List[float] | np.ndarray) -> None:
+        """Updates all hypotheses with a list of new evidence values.
+
+        Args:
+            values (List[float] | np.ndarray): A list or NumPy array of new
+            evidence values.
+
+        Raises:
+            ValueError: If the number of provided values does not match the expected
+            size.
+        """
+        values = np.array(values, dtype=float)  # Convert input to NumPy array
+
+        if values.shape[0] != self.total_size:
+            raise ValueError(
+                f"Expected {self.total_size} values, but got {len(values)}"
+            )
+
+        # Shift all rows to the left
+        self.data[:, :-1] = self.data[:, 1:]
+
+        # Append the new values, keeping NaNs where no new value is provided
+        self.data[:, -1] = values
+
+        # Increment age only for valid (non-NaN) updates
+        self.age[~np.isnan(values)] += 1
+
+    def _get_slopes(self) -> np.ndarray:
+        """Computes the average slope dynamically for each hypothesis.
+
+        Returns:
+            np.ndarray: An array containing the average slope for each hypothesis.
+        """
+        diffs = np.diff(
+            self.data, axis=1
+        )  # Compute differences between consecutive values
+        valid_steps = np.sum(~np.isnan(diffs), axis=1)  # Count non-NaN differences
+        valid_steps = np.where(
+            valid_steps == 0, np.nan, valid_steps
+        )  # Avoid division by zero
+        return (
+            np.nansum(diffs, axis=1) / valid_steps
+        )  # Compute average slope per hypothesis
+
+    def add_hyp(self, num_new_hyp: int) -> None:
+        """Adds new hypotheses initialized with NaNs and age 0.
+
+        Args:
+            num_new_hyp (int): The number of new hypotheses to add.
+        """
+        new_data = np.full((num_new_hyp, self.window_size), np.nan)
+        new_age = np.zeros(num_new_hyp, dtype=int)
+
+        # Append new streams to the existing ones
+        self.data = np.vstack((self.data, new_data))
+        self.age = np.concatenate((self.age, new_age))
+
+    def remove_hyp(self, stream_ids: List[int]) -> None:
+        """Removes specified hypotheses based on their indices.
+
+        Args:
+            stream_ids (List[int]): A list of indices representing hypotheses
+            to be removed.
+        """
+        mask = np.ones(self.data.shape[0], dtype=bool)
+        mask[stream_ids] = False  # Mark indices for removal
+
+        # Keep only the hypotheses that are not removed
+        self.data = self.data[mask]
+        self.age = self.age[mask]
+
+    def topk_hyp(
+        self,
+        k: int,
+        order: str = "descending",
+        start: int | None = None,
+        end: int | None = None,
+    ) -> np.ndarray:
+        """Returns the top K hypothesis indices based on the average slope.
+
+        Args:
+            k (int): The number of top hypotheses to return.
+            order (str, optional): Sorting order, either "ascending" or "descending".
+                Defaults to "descending".
+            start (int | None, optional): Start index (inclusive) for range filtering.
+                Defaults to None.
+            end (int | None, optional): End index (exclusive) for range filtering.
+                Defaults to None.
+
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: A tuple containing:
+                - top_k_indices: Indices of the top-K hypotheses.
+                - inverse_indices: Valid hypothesis indices not in top-K.
+        """
+        # Apply range filtering if specified
+        range_mask = np.zeros_like(self.valid_indices_mask, dtype=bool)
+        if start is None and end is None:
+            range_mask[:] = True
+        else:
+            range_mask[start:end] = True
+
+        combined_mask = self.valid_indices_mask & range_mask
+
+        # if not np.any(combined_mask):
+        #     return np.array([], dtype=int)
+
+        # retrieve slopes
+        slopes = self._get_slopes()
+        valid_slopes = slopes[combined_mask]
+        valid_ids = np.arange(len(slopes))[combined_mask]
+
+        sorted_indices = np.argsort(valid_slopes)
+        if order == "descending":
+            sorted_indices = sorted_indices[::-1]
+
+        sorted_valid_ids = valid_ids[sorted_indices]
+        top_k_indices = sorted_valid_ids[:k]
+        inverse_indices = sorted_valid_ids[k:]
+
+        return top_k_indices, inverse_indices

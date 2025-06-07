@@ -14,7 +14,10 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 
 from tbp.monty.frameworks.models.evidence_matching import EvidenceGraphLM
-from tbp.monty.frameworks.utils.evidence_matching import ChannelMapper
+from tbp.monty.frameworks.utils.evidence_matching import (
+    ChannelMapper,
+    EvidenceSlopeTracker,
+)
 from tbp.monty.frameworks.utils.graph_matching_utils import (
     possible_sensed_directions,
 )
@@ -50,10 +53,12 @@ class ResamplingHypothesesEvidenceMixin:
         self,
         *args: object,
         hypotheses_count_multiplier=1.0,
-        hypotheses_existing_to_new_ratio=0.0,
+        hypotheses_existing_to_new_ratio=0.5,
         **kwargs: object,
     ):
         super().__init__(*args, **kwargs)
+        self.evidence_update_threshold = "all"
+        self.initial_hyp_multiplier = 1.0
 
         # Controls the shrinking or growth of hypothesis space size
         # Cannot be less than 0
@@ -64,6 +69,9 @@ class ResamplingHypothesesEvidenceMixin:
         self.hypotheses_existing_to_new_ratio = max(
             0, min(hypotheses_existing_to_new_ratio, 1)
         )
+
+        # Dictionary of slope trackers, one for each graph_id
+        self.evidence_slope_trackers = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Ensure the mixin is used only with compatible learning modules.
@@ -117,6 +125,7 @@ class ResamplingHypothesesEvidenceMixin:
         # of hypotheses for a specific graph_id
         if graph_id not in self.channel_hypothesis_mapping:
             self.channel_hypothesis_mapping[graph_id] = ChannelMapper()
+            self.evidence_slope_trackers[graph_id] = EvidenceSlopeTracker()
 
         # Get all usable input channels
         input_channels_to_use = [
@@ -177,6 +186,13 @@ class ResamplingHypothesesEvidenceMixin:
                 new_evidence=channel_hypotheses_evidence,
             )
 
+            ### Add hypotheses to slope trackers
+            slope_tracker = self.evidence_slope_trackers[graph_id]
+            slope_tracker.add_hyp(
+                len(self.evidence[graph_id]) - slope_tracker.total_size
+            )
+            slope_tracker.update(self.evidence[graph_id])
+
         end_time = time.time()
         assert not np.isnan(np.max(self.evidence[graph_id])), "evidence contains NaN."
         logging.debug(
@@ -216,7 +232,7 @@ class ResamplingHypothesesEvidenceMixin:
         mapper = self.channel_hypothesis_mapping[graph_id]
         # If hypothesis space does not exist, we initialize with informed hypotheses
         if input_channel not in mapper.channels:
-            return 0, full_informed_count
+            return 0, int(full_informed_count * self.initial_hyp_multiplier)
 
         # Calculate the total number of hypotheses needed
         current = mapper.channel_size(input_channel)
@@ -383,16 +399,29 @@ class ResamplingHypothesesEvidenceMixin:
         if existing_count == 0:
             return np.zeros((0, 3)), np.zeros((0, 3, 3)), np.zeros(0)
 
-        # TODO implement sampling based on evidence slope.
+        # Define mapper and tracker
         mapper = self.channel_hypothesis_mapping[graph_id]
-        selected_locations = mapper.extract(
-            self.possible_locations[graph_id], input_channel
-        )[:existing_count]
-        selected_rotations = mapper.extract(
-            self.possible_poses[graph_id], input_channel
-        )[:existing_count]
-        selected_evidence = mapper.extract(self.evidence[graph_id], input_channel)[
-            :existing_count
-        ]
+        tracker = self.evidence_slope_trackers[graph_id]
+
+        # find ids to remove
+        channel_start_ix, channel_end_ix = mapper.channel_range(input_channel)
+        keep_ids, remove_ids = tracker.topk_hyp(
+            k=existing_count,
+            order="descending",
+            start=channel_start_ix,
+            end=channel_end_ix,
+        )
+
+        # remove ids
+        # 1) update locations, rotations and evidences with keep ids
+        selected_locations = self.possible_locations[graph_id][keep_ids]
+        selected_rotations = self.possible_poses[graph_id][keep_ids]
+        selected_evidence = self.evidence[graph_id][keep_ids]
+
+        # 2) update mapper with new size (keep ids)
+        mapper.resize_channel_to(channel_name=input_channel, new_size=len(keep_ids))
+
+        # 3) update tracker by removing the remove_ids
+        tracker.remove_hyp(remove_ids)
 
         return selected_locations, selected_rotations, selected_evidence
