@@ -288,6 +288,22 @@ class EvidenceSlopeTracker:
         """
         return self.age < self.min_age
 
+    def valid_indices_mask_range(
+        self, start: int | None, end: int | None
+    ) -> np.ndarray:
+        range_mask = np.zeros_like(self.valid_indices_mask, dtype=bool)
+
+        if start is None and end is None:
+            range_mask[:] = True
+        elif start is None:
+            range_mask[:end] = True
+        elif end is None:
+            range_mask[start:] = True
+        else:
+            range_mask[start:end] = True
+
+        return self.valid_indices_mask & range_mask
+
     def update(self, values: List[float] | np.ndarray) -> None:
         """Updates all hypotheses with a list of new evidence values.
 
@@ -359,38 +375,21 @@ class EvidenceSlopeTracker:
         self.data = self.data[mask]
         self.age = self.age[mask]
 
-    def sample_hyps(
-        self,
-        k: int,
-        start: int | None = None,
-        end: int | None = None,
-    ) -> np.ndarray:
-        """Returns the sampled hypotheses indices based on the average slope.
+    def get_keep_and_remove_ids(
+        self, desired_total: int, start: int | None = None, end: int | None = None
+    ) -> tuple[list[int], list[int]]:
+        """Determines which hypotheses to keep and which to.
 
         Args:
-            k (int): The number of hypotheses to return.
-            start (int | None, optional): Start index (inclusive) for range filtering.
-                Defaults to None.
-            end (int | None, optional): End index (exclusive) for range filtering.
-                Defaults to None.
-
+            desired_total (int): The target number of hypotheses to keep.
+            start (int | None, optional): Start index for candidate removals.
+            end (int | None, optional): End index for candidate removals.
 
         Returns:
-            tuple[np.ndarray, np.ndarray]: A tuple containing:
-                - keep_hyp: Hypotheses indices to keep.
-                - remove_hyp: Hypotheses indices to remove.
+            tuple[list[int], list[int]]: (to_keep, to_remove)
         """
-        # Apply range filtering if specified
-        range_mask = np.zeros_like(self.valid_indices_mask, dtype=bool)
-        if start is None and end is None:
-            range_mask[:] = True
-        else:
-            range_mask[start:end] = True
-
-        valid_mask = self.valid_indices_mask & range_mask
-
-        # adjust K to make sure it's not more than the valid
-        k = min(sum(valid_mask), k)
+        valid_mask = self.valid_indices_mask_range(start, end)
+        remove_requested = (end - start) - desired_total
 
         # retrieve slopes
         slopes = self._get_slopes()
@@ -399,9 +398,8 @@ class EvidenceSlopeTracker:
 
         sorted_indices = np.argsort(valid_slopes)
 
-        to_remove = valid_ids[sorted_indices[:k]]
+        to_remove = valid_ids[sorted_indices[:remove_requested]]
         to_keep = np.array(
             [i for i in np.arange(self.total_size) if i not in to_remove], dtype=int
         )
-
         return to_keep, to_remove

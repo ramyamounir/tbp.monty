@@ -53,7 +53,7 @@ class ResamplingHypothesesEvidenceMixin:
         self,
         *args: object,
         hypotheses_count_multiplier=1.0,
-        hypotheses_existing_to_new_ratio=0.5,
+        hypotheses_existing_to_new_ratio=0.1,
         **kwargs: object,
     ):
         super().__init__(*args, **kwargs)
@@ -263,12 +263,9 @@ class ResamplingHypothesesEvidenceMixin:
             new_informed = full_informed_count
 
         # additional adjustment based on valid mask
+        tracker = self.evidence_slope_trackers[graph_id]
         channel_start_ix, channel_end_ix = mapper.channel_range(input_channel)
-        must_keep = np.sum(
-            self.evidence_slope_trackers[graph_id].must_keep_mask[
-                channel_start_ix:channel_end_ix
-            ]
-        )
+        must_keep = np.sum(tracker.must_keep_mask[channel_start_ix:channel_end_ix])
         if must_keep > existing_maintained:
             existing_maintained = must_keep
             new_informed = needed - existing_maintained
@@ -418,10 +415,8 @@ class ResamplingHypothesesEvidenceMixin:
         # find ids to remove
         channel_start_ix, channel_end_ix = mapper.channel_range(input_channel)
         # keep ids need to include all must keeps
-        keep_ids, remove_ids = tracker.sample_hyps(
-            k=existing_count,
-            start=channel_start_ix,
-            end=channel_end_ix,
+        keep_ids, remove_ids = tracker.get_keep_and_remove_ids(
+            desired_total=existing_count, start=channel_start_ix, end=channel_end_ix
         )
 
         # remove ids
@@ -430,10 +425,7 @@ class ResamplingHypothesesEvidenceMixin:
         selected_rotations = self.possible_poses[graph_id][keep_ids]
         selected_evidence = self.evidence[graph_id][keep_ids]
 
-        # 2) update mapper with new size (keep ids)
-        # mapper.resize_channel_by(channel_name=input_channel, value=-1 * len(remove_ids))
-
-        # 3) update tracker by removing the remove_ids
+        # 2) update tracker by removing the remove_ids
         tracker.remove_hyp(remove_ids)
 
         return selected_locations, selected_rotations, selected_evidence
