@@ -243,7 +243,7 @@ class EvidenceSlopeTracker:
             hypothesis.
     """
 
-    def __init__(self, window_size: int = 3, min_age: int = 0) -> None:
+    def __init__(self, window_size: int = 3, min_age: int = 5) -> None:
         """Initializes the Tracker with a given window size and minimum age.
 
         Args:
@@ -359,19 +359,16 @@ class EvidenceSlopeTracker:
         self.data = self.data[mask]
         self.age = self.age[mask]
 
-    def topk_hyp(
+    def sample_hyps(
         self,
         k: int,
-        order: str = "descending",
         start: int | None = None,
         end: int | None = None,
     ) -> np.ndarray:
-        """Returns the top K hypothesis indices based on the average slope.
+        """Returns the sampled hypotheses indices based on the average slope.
 
         Args:
-            k (int): The number of top hypotheses to return.
-            order (str, optional): Sorting order, either "ascending" or "descending".
-                Defaults to "descending".
+            k (int): The number of hypotheses to return.
             start (int | None, optional): Start index (inclusive) for range filtering.
                 Defaults to None.
             end (int | None, optional): End index (exclusive) for range filtering.
@@ -380,8 +377,8 @@ class EvidenceSlopeTracker:
 
         Returns:
             tuple[np.ndarray, np.ndarray]: A tuple containing:
-                - top_k_indices: Indices of the top-K hypotheses.
-                - inverse_indices: Valid hypothesis indices not in top-K.
+                - keep_hyp: Hypotheses indices to keep.
+                - remove_hyp: Hypotheses indices to remove.
         """
         # Apply range filtering if specified
         range_mask = np.zeros_like(self.valid_indices_mask, dtype=bool)
@@ -390,22 +387,21 @@ class EvidenceSlopeTracker:
         else:
             range_mask[start:end] = True
 
-        combined_mask = self.valid_indices_mask & range_mask
+        valid_mask = self.valid_indices_mask & range_mask
 
-        # if not np.any(combined_mask):
-        #     return np.array([], dtype=int)
+        # adjust K to make sure it's not more than the valid
+        k = min(sum(valid_mask), k)
 
         # retrieve slopes
         slopes = self._get_slopes()
-        valid_slopes = slopes[combined_mask]
-        valid_ids = np.arange(len(slopes))[combined_mask]
+        valid_slopes = slopes[valid_mask]
+        valid_ids = np.arange(len(slopes))[valid_mask]
 
         sorted_indices = np.argsort(valid_slopes)
-        if order == "descending":
-            sorted_indices = sorted_indices[::-1]
 
-        sorted_valid_ids = valid_ids[sorted_indices]
-        top_k_indices = sorted_valid_ids[:k]
-        inverse_indices = sorted_valid_ids[k:]
+        to_remove = valid_ids[sorted_indices[:k]]
+        to_keep = np.array(
+            [i for i in np.arange(self.total_size) if i not in to_remove], dtype=int
+        )
 
-        return top_k_indices, inverse_indices
+        return to_keep, to_remove

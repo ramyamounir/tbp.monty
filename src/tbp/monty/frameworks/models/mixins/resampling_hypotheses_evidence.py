@@ -187,6 +187,7 @@ class ResamplingHypothesesEvidenceMixin:
             )
 
             ### Add hypotheses to slope trackers
+            # TODO: this should be for a specific input channel
             slope_tracker = self.evidence_slope_trackers[graph_id]
             slope_tracker.add_hyp(
                 len(self.evidence[graph_id]) - slope_tracker.total_size
@@ -260,6 +261,17 @@ class ResamplingHypothesesEvidenceMixin:
         # If trying to sample more hypotheses, set the available count as ceiling
         if new_informed > full_informed_count:
             new_informed = full_informed_count
+
+        # additional adjustment based on valid mask
+        channel_start_ix, channel_end_ix = mapper.channel_range(input_channel)
+        must_keep = np.sum(
+            self.evidence_slope_trackers[graph_id].must_keep_mask[
+                channel_start_ix:channel_end_ix
+            ]
+        )
+        if must_keep > existing_maintained:
+            existing_maintained = must_keep
+            new_informed = needed - existing_maintained
 
         return (
             int(existing_maintained),
@@ -405,9 +417,9 @@ class ResamplingHypothesesEvidenceMixin:
 
         # find ids to remove
         channel_start_ix, channel_end_ix = mapper.channel_range(input_channel)
-        keep_ids, remove_ids = tracker.topk_hyp(
+        # keep ids need to include all must keeps
+        keep_ids, remove_ids = tracker.sample_hyps(
             k=existing_count,
-            order="descending",
             start=channel_start_ix,
             end=channel_end_ix,
         )
@@ -419,7 +431,7 @@ class ResamplingHypothesesEvidenceMixin:
         selected_evidence = self.evidence[graph_id][keep_ids]
 
         # 2) update mapper with new size (keep ids)
-        mapper.resize_channel_to(channel_name=input_channel, new_size=len(keep_ids))
+        # mapper.resize_channel_by(channel_name=input_channel, value=-1 * len(remove_ids))
 
         # 3) update tracker by removing the remove_ids
         tracker.remove_hyp(remove_ids)
