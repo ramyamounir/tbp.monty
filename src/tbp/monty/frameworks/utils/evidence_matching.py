@@ -266,7 +266,7 @@ class EvidenceSlopeTracker:
         hyp_age: Maps channel names to hypothesis age counters.
     """
 
-    def __init__(self, window_size: int = 3, min_age: int = 5) -> None:
+    def __init__(self, window_size: int = 6, min_age: int = 5) -> None:
         """Initializes the EvidenceSlopeTracker.
 
         Args:
@@ -320,6 +320,16 @@ class EvidenceSlopeTracker:
                 (self.evidence_buffer[channel], new_data)
             )
             self.hyp_age[channel] = np.concatenate((self.hyp_age[channel], new_age))
+
+    def clear_hyp(self, channel: str) -> None:
+        """Clears Hyps.
+
+        This clears the hypotheses.
+
+        Args:
+            channel: Name of the input channel.
+        """
+        self.remove_hyp(np.arange(self.total_size(channel)), channel)
 
     def update(self, values: npt.NDArray[np.float64], channel: str) -> None:
         """Updates all hypotheses in a channel with new evidence values.

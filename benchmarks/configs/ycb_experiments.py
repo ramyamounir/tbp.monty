@@ -59,6 +59,9 @@ from tbp.monty.frameworks.models.evidence_matching.learning_module import (
 from tbp.monty.frameworks.models.evidence_matching.model import (
     MontyForEvidenceGraphMatching,
 )
+from tbp.monty.frameworks.models.evidence_matching.resampling_hypotheses_updater import (
+    ResamplingHypothesesUpdater,
+)
 from tbp.monty.frameworks.models.sensor_modules import (
     DetailedLoggingSM,
     FeatureChangeSM,
@@ -631,6 +634,14 @@ randrot_noise_77obj_5lms_dist_agent.update(
         object_init_sampler=RandomRotationObjectInitializer(),
     ),
 )
+
+randrot_noise_10distinctobj_dist_agent["monty_config"].learning_module_configs[
+    "learning_module_0"
+]["learning_module_args"]["hypotheses_updater_class"] = ResamplingHypothesesUpdater
+
+randrot_noise_10distinctobj_surf_agent["monty_config"].learning_module_configs[
+    "learning_module_0"
+]["learning_module_args"]["hypotheses_updater_class"] = ResamplingHypothesesUpdater
 
 experiments = YcbExperiments(
     base_config_10distinctobj_dist_agent=base_config_10distinctobj_dist_agent,

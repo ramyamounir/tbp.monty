@@ -327,7 +327,7 @@ class ResamplingHypothesesUpdater:
 
         # If hypothesis space does not exist, we initialize with informed hypotheses
         if input_channel not in mapper.channels:
-            return 0, full_informed_count
+            return 0, round(full_informed_count * 0.2)
 
         # Calculate the total number of hypotheses needed
         current = mapper.channel_size(input_channel)
@@ -391,6 +391,9 @@ class ResamplingHypothesesUpdater:
         """
         # Return empty arrays for no hypotheses to sample
         if existing_count == 0:
+            if input_channel in tracker.evidence_buffer:
+                tracker.clear_hyp(input_channel)
+
             return ChannelHypotheses(
                 input_channel=input_channel,
                 locations=np.zeros((0, 3)),
