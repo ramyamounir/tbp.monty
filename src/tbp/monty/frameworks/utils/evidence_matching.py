@@ -258,6 +258,16 @@ class EvidenceSlopeTracker:
     This tracker supports adding, updating, pruning, and analyzing hypotheses per
     channel.
 
+    Note:
+        - One optimization might be to treat the array of tracked values as a ring-like
+            structure. Rather than shifting the values every time they are updated, we
+            could just iterate an index which determines where in the ring we are. Then
+            we would update one column, which based on the index, corresponds to the
+            most recent values.
+        - Another optimization is only track slopes not the actual evidence values. The
+            pairwise slopes for previous scores are not expected to change over time
+            and therefore can be calculated a single time and stored.
+
     Attributes:
         window_size: Number of past values to consider for slope calculation.
         min_age: Minimum number of updates before a hypothesis can be considered for
@@ -397,6 +407,15 @@ class EvidenceSlopeTracker:
         mask[hyp_ids] = False
         self.evidence_buffer[channel] = self.evidence_buffer[channel][mask]
         self.hyp_age[channel] = self.hyp_age[channel][mask]
+
+    def clear_hyp(self, channel: str) -> None:
+        """Clears the hypotheses in a specific channel.
+
+        Args:
+            channel: Name of the input channel.
+        """
+        if channel in self.evidence_buffer:
+            self.remove_hyp(np.arange(self.total_size(channel)), channel)
 
     def calculate_keep_and_remove_ids(
         self, num_keep: int, channel: str
