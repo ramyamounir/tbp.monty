@@ -327,7 +327,7 @@ class ResamplingHypothesesUpdater:
 
         # If hypothesis space does not exist, we initialize with informed hypotheses
         if input_channel not in mapper.channels:
-            return 0, round(full_informed_count * 0.2)
+            return 0, full_informed_count
 
         # Calculate the total number of hypotheses needed
         current = mapper.channel_size(input_channel)
