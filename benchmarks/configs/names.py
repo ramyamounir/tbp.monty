@@ -91,6 +91,33 @@ NAMES.extend(field.name for field in fields(YcbExperiments))
 
 
 @dataclass
+class ResamplingYcbExperiments:
+    resampling_base_config_10distinctobj_dist_agent: dict
+    resampling_base_config_10distinctobj_surf_agent: dict
+    resampling_randrot_noise_10distinctobj_dist_agent: dict
+    resampling_randrot_noise_10distinctobj_dist_on_distm: dict
+    resampling_randrot_noise_10distinctobj_surf_agent: dict
+    resampling_randrot_10distinctobj_surf_agent: dict
+    resampling_randrot_noise_10distinctobj_5lms_dist_agent: dict
+    resampling_base_10simobj_surf_agent: dict
+    resampling_randrot_noise_10simobj_surf_agent: dict
+    resampling_randrot_noise_10simobj_dist_agent: dict
+    resampling_randomrot_rawnoise_10distinctobj_surf_agent: dict
+    resampling_base_10multi_distinctobj_dist_agent: dict
+    resampling_surf_agent_unsupervised_10distinctobj: dict
+    resampling_surf_agent_unsupervised_10distinctobj_noise: dict
+    resampling_surf_agent_unsupervised_10simobj: dict
+    resampling_base_77obj_dist_agent: dict
+    resampling_base_77obj_surf_agent: dict
+    resampling_randrot_noise_77obj_surf_agent: dict
+    resampling_randrot_noise_77obj_dist_agent: dict
+    resampling_randrot_noise_77obj_5lms_dist_agent: dict
+
+
+NAMES.extend(field.name for field in fields(ResamplingYcbExperiments))
+
+
+@dataclass
 class UnsupervisedInferenceExperiments:
     unsupervised_inference_distinctobj_surf_agent: dict
     unsupervised_inference_distinctobj_dist_agent: dict
