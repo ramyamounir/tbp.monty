@@ -16,6 +16,7 @@ from tbp.monty.frameworks.models.evidence_matching.resampling_hypotheses_updater
     ResamplingHypothesesUpdater,
 )
 
+# Adding Resampling to YCB experiments
 resampling_ycb_experiments = {}
 for exp_name, cfg in asdict(experiments).items():
     mod_exp_name = "resampling_" + exp_name
@@ -30,6 +31,7 @@ for exp_name, cfg in asdict(experiments).items():
     resampling_ycb_experiments[mod_exp_name] = mod_cfg
 
 
+# Varying reduction factor
 resampling_ycb_reduced_experiments = {}
 for exp_name, cfg in asdict(experiments).items():
     if exp_name == "randrot_noise_77obj_dist_agent":
@@ -49,6 +51,26 @@ for exp_name, cfg in asdict(experiments).items():
                 ] = reduction
 
             resampling_ycb_reduced_experiments[mod_exp_name] = mod_cfg
+
+
+# Varying window size
+resampling_ycb_window_experiments = {}
+for exp_name, cfg in asdict(experiments).items():
+    if exp_name == "randrot_noise_10distinctobj_dist_agent":
+        for window in [3, 5, 7, 9]:
+            mod_exp_name = "resampling_" + exp_name + "_" + str(window) + "window"
+            mod_cfg = deepcopy(cfg)
+
+            lm_configs = mod_cfg["monty_config"]["learning_module_configs"]
+            for lm in lm_configs:
+                lm_configs[lm]["learning_module_args"]["hypotheses_updater_class"] = (
+                    ResamplingHypothesesUpdater
+                )
+                lm_configs[lm]["learning_module_args"]["hypotheses_updater_args"][
+                    "slope_tracker_window_size"
+                ] = window
+
+            resampling_ycb_window_experiments[mod_exp_name] = mod_cfg
 
 
 experiments = ResamplingYcbExperiments(
@@ -138,6 +160,18 @@ experiments = ResamplingYcbExperiments(
     ],
     resampling_randrot_noise_77obj_dist_agent_9reduction=resampling_ycb_reduced_experiments[
         "resampling_randrot_noise_77obj_dist_agent_9reduction"
+    ],
+    resampling_randrot_noise_10distinctobj_dist_agent_3window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_3window"
+    ],
+    resampling_randrot_noise_10distinctobj_dist_agent_5window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_5window"
+    ],
+    resampling_randrot_noise_10distinctobj_dist_agent_7window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_7window"
+    ],
+    resampling_randrot_noise_10distinctobj_dist_agent_9window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_9window"
     ],
 )
 CONFIGS = asdict(experiments)

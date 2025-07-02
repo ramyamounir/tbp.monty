@@ -121,6 +121,10 @@ class ResamplingYcbExperiments:
     resampling_randrot_noise_77obj_dist_agent_7reduction: dict
     resampling_randrot_noise_77obj_dist_agent_8reduction: dict
     resampling_randrot_noise_77obj_dist_agent_9reduction: dict
+    resampling_randrot_noise_10distinctobj_dist_agent_3window: dict
+    resampling_randrot_noise_10distinctobj_dist_agent_5window: dict
+    resampling_randrot_noise_10distinctobj_dist_agent_7window: dict
+    resampling_randrot_noise_10distinctobj_dist_agent_9window: dict
 
 
 NAMES.extend(field.name for field in fields(ResamplingYcbExperiments))

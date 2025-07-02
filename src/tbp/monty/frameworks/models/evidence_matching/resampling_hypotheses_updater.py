@@ -81,6 +81,7 @@ class ResamplingHypothesesUpdater:
         hypotheses_count_multiplier: float = 1.0,
         hypotheses_existing_to_new_ratio: float = 0.1,
         hypotheses_space_reduction_factor: float = 1.0,
+        slope_tracker_window_size: int = 6,
         initial_possible_poses: Literal["uniform", "informed"]
         | list[Rotation] = "informed",
         max_nneighbors: int = 3,
@@ -116,6 +117,8 @@ class ResamplingHypothesesUpdater:
                 0.0.
             hypotheses_space_reduction_factor: Controls the initial hypotheses space
                 size.
+            slope_tracker_window_size: Sets the window size of the evidence slope
+                tracker.
             initial_possible_poses: Initial
                 possible poses that should be tested for. Defaults to "informed".
             max_nneighbors: Maximum number of nearest neighbors to consider in the
@@ -176,6 +179,8 @@ class ResamplingHypothesesUpdater:
             0, min(hypotheses_space_reduction_factor, 1)
         )
 
+        self.slope_tracker_window_size = slope_tracker_window_size
+
         # Dictionary of slope trackers, one for each graph_id
         self.evidence_slope_trackers: dict[str, EvidenceSlopeTracker] = {}
 
@@ -211,7 +216,9 @@ class ResamplingHypothesesUpdater:
         # Initialize a `EvidenceSlopeTracker` to keep track of evidence slopes
         # for hypotheses of a specific graph_id
         if graph_id not in self.evidence_slope_trackers:
-            self.evidence_slope_trackers[graph_id] = EvidenceSlopeTracker()
+            self.evidence_slope_trackers[graph_id] = EvidenceSlopeTracker(
+                window_size=self.slope_tracker_window_size
+            )
         tracker = self.evidence_slope_trackers[graph_id]
 
         input_channels_to_use = all_usable_input_channels(
