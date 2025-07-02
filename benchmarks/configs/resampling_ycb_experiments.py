@@ -11,11 +11,11 @@ from dataclasses import asdict
 
 from benchmarks.configs.names import ResamplingYcbExperiments
 from benchmarks.configs.ycb_experiments import experiments
-from tbp.monty.frameworks.models.evidence_matching.resampling_hypotheses_updater import (
+from tbp.monty.frameworks.models.evidence_matching.resampling_hypotheses_updater import (  # noqa: E501
     ResamplingHypothesesUpdater,
 )
 
-modified_experiments = {}
+resampling_ycb_experiments = {}
 for exp_name, cfg in asdict(experiments).items():
     mod_exp_name = "resampling_" + exp_name
     mod_cfg = cfg.copy()
@@ -26,68 +26,87 @@ for exp_name, cfg in asdict(experiments).items():
             ResamplingHypothesesUpdater
         )
 
-    modified_experiments[mod_exp_name] = mod_cfg
+    resampling_ycb_experiments[mod_exp_name] = mod_cfg
+
+
+resampling_ycb_reduced_experiments = {}
+for exp_name, cfg in asdict(experiments).items():
+    if exp_name == "randrot_noise_77obj_dist_agent":
+        for reduction in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+            mod_exp_name = "resampling_" + exp_name + "_" + str(reduction) + "reduction"
+            mod_cfg = cfg.copy()
+
+            lm_configs = mod_cfg["monty_config"]["learning_module_configs"]
+            for lm in lm_configs:
+                lm_configs[lm]["learning_module_args"]["hypotheses_updater_class"] = (
+                    ResamplingHypothesesUpdater
+                )
+                lm_configs[lm]["learning_module_args"]["hypotheses_updater_args"][
+                    "hypotheses_space_reduction_factor"
+                ] = reduction
+
+            resampling_ycb_reduced_experiments[mod_exp_name] = mod_cfg
 
 
 experiments = ResamplingYcbExperiments(
-    resampling_base_config_10distinctobj_dist_agent=modified_experiments[
+    resampling_base_config_10distinctobj_dist_agent=resampling_ycb_experiments[
         "resampling_base_config_10distinctobj_dist_agent"
     ],
-    resampling_base_config_10distinctobj_surf_agent=modified_experiments[
+    resampling_base_config_10distinctobj_surf_agent=resampling_ycb_experiments[
         "resampling_base_config_10distinctobj_surf_agent"
     ],
-    resampling_randrot_noise_10distinctobj_dist_agent=modified_experiments[
+    resampling_randrot_noise_10distinctobj_dist_agent=resampling_ycb_experiments[
         "resampling_randrot_noise_10distinctobj_dist_agent"
     ],
-    resampling_randrot_noise_10distinctobj_dist_on_distm=modified_experiments[
+    resampling_randrot_noise_10distinctobj_dist_on_distm=resampling_ycb_experiments[
         "resampling_randrot_noise_10distinctobj_dist_on_distm"
     ],
-    resampling_randrot_noise_10distinctobj_surf_agent=modified_experiments[
+    resampling_randrot_noise_10distinctobj_surf_agent=resampling_ycb_experiments[
         "resampling_randrot_noise_10distinctobj_surf_agent"
     ],
-    resampling_randrot_10distinctobj_surf_agent=modified_experiments[
+    resampling_randrot_10distinctobj_surf_agent=resampling_ycb_experiments[
         "resampling_randrot_10distinctobj_surf_agent"
     ],
-    resampling_randrot_noise_10distinctobj_5lms_dist_agent=modified_experiments[
+    resampling_randrot_noise_10distinctobj_5lms_dist_agent=resampling_ycb_experiments[
         "resampling_randrot_noise_10distinctobj_5lms_dist_agent"
     ],
-    resampling_base_10simobj_surf_agent=modified_experiments[
+    resampling_base_10simobj_surf_agent=resampling_ycb_experiments[
         "resampling_base_10simobj_surf_agent"
     ],
-    resampling_randrot_noise_10simobj_surf_agent=modified_experiments[
+    resampling_randrot_noise_10simobj_surf_agent=resampling_ycb_experiments[
         "resampling_randrot_noise_10simobj_surf_agent"
     ],
-    resampling_randrot_noise_10simobj_dist_agent=modified_experiments[
+    resampling_randrot_noise_10simobj_dist_agent=resampling_ycb_experiments[
         "resampling_randrot_noise_10simobj_dist_agent"
     ],
-    resampling_randomrot_rawnoise_10distinctobj_surf_agent=modified_experiments[
+    resampling_randomrot_rawnoise_10distinctobj_surf_agent=resampling_ycb_experiments[
         "resampling_randomrot_rawnoise_10distinctobj_surf_agent"
     ],
-    resampling_base_10multi_distinctobj_dist_agent=modified_experiments[
+    resampling_base_10multi_distinctobj_dist_agent=resampling_ycb_experiments[
         "resampling_base_10multi_distinctobj_dist_agent"
     ],
-    resampling_surf_agent_unsupervised_10distinctobj=modified_experiments[
+    resampling_surf_agent_unsupervised_10distinctobj=resampling_ycb_experiments[
         "resampling_surf_agent_unsupervised_10distinctobj"
     ],
-    resampling_surf_agent_unsupervised_10distinctobj_noise=modified_experiments[
+    resampling_surf_agent_unsupervised_10distinctobj_noise=resampling_ycb_experiments[
         "resampling_surf_agent_unsupervised_10distinctobj_noise"
     ],
-    resampling_surf_agent_unsupervised_10simobj=modified_experiments[
+    resampling_surf_agent_unsupervised_10simobj=resampling_ycb_experiments[
         "resampling_surf_agent_unsupervised_10simobj"
     ],
-    resampling_base_77obj_dist_agent=modified_experiments[
+    resampling_base_77obj_dist_agent=resampling_ycb_experiments[
         "resampling_base_77obj_dist_agent"
     ],
-    resampling_base_77obj_surf_agent=modified_experiments[
+    resampling_base_77obj_surf_agent=resampling_ycb_experiments[
         "resampling_base_77obj_surf_agent"
     ],
-    resampling_randrot_noise_77obj_surf_agent=modified_experiments[
+    resampling_randrot_noise_77obj_surf_agent=resampling_ycb_experiments[
         "resampling_randrot_noise_77obj_surf_agent"
     ],
-    resampling_randrot_noise_77obj_dist_agent=modified_experiments[
+    resampling_randrot_noise_77obj_dist_agent=resampling_ycb_experiments[
         "resampling_randrot_noise_77obj_dist_agent"
     ],
-    resampling_randrot_noise_77obj_5lms_dist_agent=modified_experiments[
+    resampling_randrot_noise_77obj_5lms_dist_agent=resampling_ycb_experiments[
         "resampling_randrot_noise_77obj_5lms_dist_agent"
     ],
 )

@@ -80,6 +80,7 @@ class ResamplingHypothesesUpdater:
         ),
         hypotheses_count_multiplier: float = 1.0,
         hypotheses_existing_to_new_ratio: float = 0.1,
+        hypotheses_space_reduction_factor: float = 1.0,
         initial_possible_poses: Literal["uniform", "informed"]
         | list[Rotation] = "informed",
         max_nneighbors: int = 3,
@@ -113,6 +114,8 @@ class ResamplingHypothesesUpdater:
             hypotheses_existing_to_new_ratio: Controls the proportion of the
                 existing vs. newly sampled hypotheses during resampling. Defaults to
                 0.0.
+            hypotheses_space_reduction_factor: Controls the initial hypotheses space
+                size.
             initial_possible_poses: Initial
                 possible poses that should be tested for. Defaults to "informed".
             max_nneighbors: Maximum number of nearest neighbors to consider in the
@@ -166,6 +169,10 @@ class ResamplingHypothesesUpdater:
         # Controls the ratio of existing to newly sampled hypotheses
         # Bounded between 0 and 1
         self.hypotheses_existing_to_new_ratio = max(
+            0, min(hypotheses_existing_to_new_ratio, 1)
+        )
+
+        self.hypotheses_space_reduction_factor = max(
             0, min(hypotheses_existing_to_new_ratio, 1)
         )
 
@@ -327,7 +334,9 @@ class ResamplingHypothesesUpdater:
 
         # If hypothesis space does not exist, we initialize with informed hypotheses
         if input_channel not in mapper.channels:
-            return 0, full_informed_count
+            return 0, round(
+                full_informed_count * self.hypotheses_space_reduction_factor
+            )
 
         # Calculate the total number of hypotheses needed
         current = mapper.channel_size(input_channel)
