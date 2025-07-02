@@ -173,7 +173,7 @@ class ResamplingHypothesesUpdater:
         )
 
         self.hypotheses_space_reduction_factor = max(
-            0, min(hypotheses_existing_to_new_ratio, 1)
+            0, min(hypotheses_space_reduction_factor, 1)
         )
 
         # Dictionary of slope trackers, one for each graph_id
