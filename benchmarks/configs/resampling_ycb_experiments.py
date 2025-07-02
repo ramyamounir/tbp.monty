@@ -7,6 +7,7 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT.
 
+from copy import deepcopy
 from dataclasses import asdict
 
 from benchmarks.configs.names import ResamplingYcbExperiments
@@ -33,8 +34,10 @@ resampling_ycb_reduced_experiments = {}
 for exp_name, cfg in asdict(experiments).items():
     if exp_name == "randrot_noise_77obj_dist_agent":
         for reduction in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
-            mod_exp_name = "resampling_" + exp_name + "_" + str(reduction) + "reduction"
-            mod_cfg = cfg.copy()
+            mod_exp_name = (
+                "resampling_" + exp_name + "_" + str(int(reduction * 10)) + "reduction"
+            )
+            mod_cfg = deepcopy(cfg)
 
             lm_configs = mod_cfg["monty_config"]["learning_module_configs"]
             for lm in lm_configs:
@@ -108,6 +111,33 @@ experiments = ResamplingYcbExperiments(
     ],
     resampling_randrot_noise_77obj_5lms_dist_agent=resampling_ycb_experiments[
         "resampling_randrot_noise_77obj_5lms_dist_agent"
+    ],
+    resampling_randrot_noise_77obj_dist_agent_1reduction=resampling_ycb_reduced_experiments[
+        "resampling_randrot_noise_77obj_dist_agent_1reduction"
+    ],
+    resampling_randrot_noise_77obj_dist_agent_2reduction=resampling_ycb_reduced_experiments[
+        "resampling_randrot_noise_77obj_dist_agent_2reduction"
+    ],
+    resampling_randrot_noise_77obj_dist_agent_3reduction=resampling_ycb_reduced_experiments[
+        "resampling_randrot_noise_77obj_dist_agent_3reduction"
+    ],
+    resampling_randrot_noise_77obj_dist_agent_4reduction=resampling_ycb_reduced_experiments[
+        "resampling_randrot_noise_77obj_dist_agent_4reduction"
+    ],
+    resampling_randrot_noise_77obj_dist_agent_5reduction=resampling_ycb_reduced_experiments[
+        "resampling_randrot_noise_77obj_dist_agent_5reduction"
+    ],
+    resampling_randrot_noise_77obj_dist_agent_6reduction=resampling_ycb_reduced_experiments[
+        "resampling_randrot_noise_77obj_dist_agent_6reduction"
+    ],
+    resampling_randrot_noise_77obj_dist_agent_7reduction=resampling_ycb_reduced_experiments[
+        "resampling_randrot_noise_77obj_dist_agent_7reduction"
+    ],
+    resampling_randrot_noise_77obj_dist_agent_8reduction=resampling_ycb_reduced_experiments[
+        "resampling_randrot_noise_77obj_dist_agent_8reduction"
+    ],
+    resampling_randrot_noise_77obj_dist_agent_9reduction=resampling_ycb_reduced_experiments[
+        "resampling_randrot_noise_77obj_dist_agent_9reduction"
     ],
 )
 CONFIGS = asdict(experiments)

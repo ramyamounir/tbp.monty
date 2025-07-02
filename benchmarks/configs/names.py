@@ -112,6 +112,15 @@ class ResamplingYcbExperiments:
     resampling_randrot_noise_77obj_surf_agent: dict
     resampling_randrot_noise_77obj_dist_agent: dict
     resampling_randrot_noise_77obj_5lms_dist_agent: dict
+    resampling_randrot_noise_77obj_dist_agent_1reduction: dict
+    resampling_randrot_noise_77obj_dist_agent_2reduction: dict
+    resampling_randrot_noise_77obj_dist_agent_3reduction: dict
+    resampling_randrot_noise_77obj_dist_agent_4reduction: dict
+    resampling_randrot_noise_77obj_dist_agent_5reduction: dict
+    resampling_randrot_noise_77obj_dist_agent_6reduction: dict
+    resampling_randrot_noise_77obj_dist_agent_7reduction: dict
+    resampling_randrot_noise_77obj_dist_agent_8reduction: dict
+    resampling_randrot_noise_77obj_dist_agent_9reduction: dict
 
 
 NAMES.extend(field.name for field in fields(ResamplingYcbExperiments))
