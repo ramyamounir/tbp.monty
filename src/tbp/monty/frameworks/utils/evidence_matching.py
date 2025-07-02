@@ -267,6 +267,8 @@ class EvidenceSlopeTracker:
         - Another optimization is only track slopes not the actual evidence values. The
             pairwise slopes for previous scores are not expected to change over time
             and therefore can be calculated a single time and stored.
+        - We can also test returning a random subsample of indices with
+            slopes < mean(slopes) for `to_remove` instead of using `np.argsort`.
 
     Attributes:
         window_size: Number of past values to consider for slope calculation.
@@ -330,16 +332,6 @@ class EvidenceSlopeTracker:
                 (self.evidence_buffer[channel], new_data)
             )
             self.hyp_age[channel] = np.concatenate((self.hyp_age[channel], new_age))
-
-    def clear_hyp(self, channel: str) -> None:
-        """Clears Hyps.
-
-        This clears the hypotheses.
-
-        Args:
-            channel: Name of the input channel.
-        """
-        self.remove_hyp(np.arange(self.total_size(channel)), channel)
 
     def update(self, values: npt.NDArray[np.float64], channel: str) -> None:
         """Updates all hypotheses in a channel with new evidence values.
@@ -484,6 +476,13 @@ def evidence_update_threshold(
     Returns:
         The evidence update threshold.
 
+    Note:
+        The logic of `evidence_threshold_config="all"` can be optimized by
+        bypassing the `np.min` function here and bypassing the indexing of
+        `np.where` function in the displacer. We want to update all the existing
+        hypotheses, therefore there is no need to find the specific indices for
+        them in the hypotheses space.
+
     Raises:
         InvalidEvidenceThresholdConfig: If `evidence_threshold_config` is
             not in the allowed values
@@ -517,7 +516,7 @@ def evidence_update_threshold(
         raise InvalidEvidenceThresholdConfig(
             "evidence_threshold_config not in "
             "[int, float, '[int]%', 'mean', "
-            "'median', 'all', 'x_percent_threshold', 'None']"
+            "'median', 'all', 'x_percent_threshold']"
         )
 
 

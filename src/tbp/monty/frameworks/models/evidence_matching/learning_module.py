@@ -59,7 +59,7 @@ class EvidenceGraphLM(GraphLM):
             by this value before being added to the overall evidence of a hypothesis.
             This factor is only multiplied with the feature evidence (not the pose
             evidence as opposed to the present_weight).
-        evidence_threshold_config (float | str | None): How to decide which hypotheses
+        evidence_threshold_config: How to decide which hypotheses
             should be updated. When this parameter is either '[int]%' or
             'x_percent_threshold', then this parameter is applied to the evidence
             for the Most Likely Hypothesis (MLH) to determine a minimum evidence
