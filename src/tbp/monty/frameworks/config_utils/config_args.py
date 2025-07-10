@@ -1106,6 +1106,96 @@ class TwoLMStackedMontyConfig(TwoLMMontyConfig):
 
 
 @dataclass
+## 5 Five Learning Modules Monty Config
+# Can we adapt this to 5 LMs stacked on top of each other? (ADAPTED VERSION)
+class FiveLMStackedMontyConfig(MontyConfig):
+    monty_class: Callable = MontyForGraphMatching
+    learning_module_configs: Union[dataclass, Dict] = field(
+        default_factory=lambda: dict(
+            learning_module_0=dict(
+                learning_module_class=DisplacementGraphLM,
+                learning_module_args=dict(k=5, match_attribute="displacement"),
+            ),
+            learning_module_1=dict(
+                learning_module_class=DisplacementGraphLM,
+                learning_module_args=dict(k=5, match_attribute="displacement"),
+            ),
+            learning_module_2=dict(
+                learning_module_class=DisplacementGraphLM,
+                learning_module_args=dict(k=5, match_attribute="displacement"),
+            ),
+            learning_module_3=dict(
+                learning_module_class=DisplacementGraphLM,
+                learning_module_args=dict(k=5, match_attribute="displacement"),
+            ),
+            learning_module_4=dict(
+                learning_module_class=DisplacementGraphLM,
+                learning_module_args=dict(k=5, match_attribute="displacement"),
+            ),
+        )
+    )
+    sensor_module_configs: Union[dataclass, Dict] = field(
+        default_factory=lambda: dict(
+            sensor_module_0=dict(
+                sensor_module_class=HabitatDistantPatchSM,
+                sensor_module_args=dict(
+                    sensor_module_id="patch_0",
+                    features=[
+                        # morphological features (nescessarry)
+                        "pose_vectors",
+                        "pose_fully_defined",
+                        "on_object",
+                        # non-morphological features (optional)
+                        "object_coverage",
+                        "hsv",
+                        "principal_curvatures",
+                        "principal_curvatures_log",
+                        "gaussian_curvature",
+                        "mean_curvature",
+                        "gaussian_curvature_sc",
+                        "mean_curvature_sc",
+                    ],
+                    save_raw_obs=True,
+                ),
+            ),
+            sensor_module_1=dict(
+                # No need to extract features from the view finder since it is not
+                # connected to a learning module (just used at beginning of episode)
+                sensor_module_class=DetailedLoggingSM,
+                sensor_module_args=dict(
+                    sensor_module_id="view_finder",
+                    save_raw_obs=True,
+                ),
+            ),
+        )
+    )
+    motor_system_config: Union[dataclass, Dict] = field(
+        default_factory=MotorSystemConfigInformedNoTrans
+    )
+    sm_to_agent_dict: Dict = field(
+        default_factory=lambda: dict(
+            patch_0="agent_id_0",
+            view_finder="agent_id_0",
+        )
+    )
+    sm_to_lm_matrix: List = field(
+        default_factory=lambda: [
+            [0],
+            [],
+            [],
+            [],
+            [],
+        ],  # View finder (sm1) not connected to lm
+    )
+    # First LM only gets sensory input, second gets input from first + sensor
+    lm_to_lm_matrix: Optional[List] = field(
+        default_factory=lambda: [[], [0], [1], [2], [3]]
+    )
+    lm_to_lm_vote_matrix: Optional[List] = None
+    monty_args: Union[Dict, dataclass] = field(default_factory=MontyArgs)
+
+
+@dataclass
 class FiveLMMontyConfig(MontyConfig):
     monty_class: Callable = MontyForGraphMatching
     learning_module_configs: Union[dataclass, Dict] = field(
