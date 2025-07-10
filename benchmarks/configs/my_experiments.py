@@ -1,40 +1,24 @@
-# Copyright 2025 Thousand Brains Project
-#
-# Copyright may exist in Contributors' modifications
-# and/or contributions to the work.
-#
-# Use of this source code is governed by the MIT
-# license that can be found in the LICENSE file or at
-# https://opensource.org/licenses/MIT.
-
 import os
 from dataclasses import asdict
 
-import numpy as np
-
 from benchmarks.configs.names import MyExperiments
 from tbp.monty.frameworks.config_utils.config_args import (
-    # FiveLMStackedMontyConfig,
-    LoggingConfig,
+    FiveLMStackedMontyConfig,
     MontyArgs,
-    TwoLMStackedMontyConfig,
+    PretrainLoggingConfig,
     get_cube_face_and_corner_views_rotations,
 )
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
-    DebugExperimentArgs,
     EnvironmentDataloaderPerObjectArgs,
+    ExperimentArgs,
     PredefinedObjectInitializer,
-    get_object_names_by_idx,
 )
 from tbp.monty.frameworks.environments import embodied_data as ED
-from tbp.monty.frameworks.experiments.object_recognition_experiments import (
-    MontyObjectRecognitionExperiment,
-)
-from tbp.monty.frameworks.models.evidence_matching.learning_module import (
-    EvidenceGraphLM,
+from tbp.monty.frameworks.experiments import (
+    MontySupervisedObjectPretrainingExperiment,
 )
 from tbp.monty.simulators.habitat.configs import (
-    TwoLMStackedDistantMountHabitatDatasetArgs,
+    FiveLMStackedDistantMountHabitatDatasetArgs,
 )
 
 """
@@ -58,98 +42,46 @@ Training
 object_names = ["mug", "banana"]
 # Get predefined object rotations that give good views of the object from 14 angles.
 train_rotations = get_cube_face_and_corner_views_rotations()
-test_rotations = [[0.0, 0.0, 0.0], [0.0, 90.0, 0.0], [0.0, 180.0, 0.0]]
 
-
-two_stacked_lms_config = dict(
-    learning_module_0=dict(
-        learning_module_class=EvidenceGraphLM,
-        learning_module_args=dict(
-            max_match_distance=0.01,
-            tolerances={
-                "patch_0": {
-                    "hsv": np.array([0.1, 1, 1]),
-                    "principal_curvatures_log": np.ones(2),
-                }
-            },
-            feature_weights={},
-            use_multithreading=False,
-            path_similarity_threshold=0.001,
-            x_percent_threshold=30,
-            required_symmetry_evidence=20,
-            # generally would want this to be smaller than second LM
-            # but setting same for now to get interesting results with YCB
-            max_graph_size=0.3,
-            num_model_voxels_per_dim=30,
-            max_nodes_per_graph=500,
-            hypotheses_updater_args=dict(max_nneighbors=5),
-        ),
-    ),
-    learning_module_1=dict(
-        learning_module_class=EvidenceGraphLM,
-        learning_module_args=dict(
-            max_match_distance=0.01,
-            tolerances={
-                "patch_1": {
-                    "hsv": np.array([0.1, 1, 1]),
-                    "principal_curvatures_log": np.ones(2),
-                },
-                # object Id currently is an int representation of the strings
-                # in the object label so we keep this tolerance high. This is
-                # just until we have added a way to encode object ID with some
-                # real similarity measure.
-                "learning_module_0": {"object_id": 1},
-            },
-            feature_weights={"learning_module_0": {"object_id": 1}},
-            use_multithreading=False,
-            path_similarity_threshold=0.001,
-            x_percent_threshold=30,
-            required_symmetry_evidence=20,
-            max_graph_size=0.3,
-            num_model_voxels_per_dim=30,
-            max_nodes_per_graph=500,
-            hypotheses_updater_args=dict(max_nneighbors=5),
-        ),
-    ),
-)
-
-TwoLM = dict(
-    experiment_class=MontyObjectRecognitionExperiment,
-    experiment_args=DebugExperimentArgs(
+# The config dictionary for the pretraining experiment.
+FiveLM = dict(
+    # Specify monty experiment and its args.
+    # The MontySupervisedObjectPretrainingExperiment class will provide the model
+    # with object and pose labels for supervised pretraining.
+    experiment_class=MontySupervisedObjectPretrainingExperiment,
+    experiment_args=ExperimentArgs(
+        n_train_epochs=len(train_rotations),
         do_eval=False,
-        do_train=True,
-        n_train_epochs=2,  # len(test_rotations),
-        n_eval_epochs=len(test_rotations),
-        # model_name_or_path=five_lm_10dist_obj,
-        max_train_steps=200,
-        max_eval_steps=200,
-        min_lms_match=2,
     ),
-    monty_config=TwoLMStackedMontyConfig(
-        monty_args=MontyArgs(num_exploratory_steps=10000, min_train_steps=3),
-        learning_module_configs=two_stacked_lms_config,
+    # Specify logging config.
+    logging_config=PretrainLoggingConfig(
+        # output_dir=project_dir,
+        run_name=model_name,
+        wandb_handlers=[],
     ),
-    logging_config=LoggingConfig(
-        python_log_level="INFO",
-        monty_handlers=[],
-        monty_log_level="BASIC",
+    # Specify the Monty config.
+    monty_config=FiveLMStackedMontyConfig(
+        monty_args=MontyArgs(num_exploratory_steps=500),
+        # motor_system_config=MotorSystemConfigCurvatureInformedSurface(),
     ),
+    # Set up the environment and agent
     dataset_class=ED.EnvironmentDataset,
-    dataset_args=TwoLMStackedDistantMountHabitatDatasetArgs(),
+    dataset_args=FiveLMStackedDistantMountHabitatDatasetArgs(),
     train_dataloader_class=ED.InformedEnvironmentDataLoader,
     train_dataloader_args=EnvironmentDataloaderPerObjectArgs(
-        object_names=get_object_names_by_idx(0, 2),
-        object_init_sampler=PredefinedObjectInitializer(rotations=[[0.0, 0.0, 0.0]]),
+        object_names=object_names,
+        object_init_sampler=PredefinedObjectInitializer(rotations=train_rotations),
     ),
+    # For a complete config we need to specify an eval_dataloader but since we only
+    # train here, this is unused
     eval_dataloader_class=ED.InformedEnvironmentDataLoader,
     eval_dataloader_args=EnvironmentDataloaderPerObjectArgs(
-        object_names=get_object_names_by_idx(0, 4),
-        object_init_sampler=PredefinedObjectInitializer(rotations=test_rotations),
+        object_names=object_names,
+        object_init_sampler=PredefinedObjectInitializer(rotations=train_rotations),
     ),
 )
 
-
 experiments = MyExperiments(
-    FiveLM=TwoLM,
+    FiveLM=FiveLM,
 )
 CONFIGS = asdict(experiments)

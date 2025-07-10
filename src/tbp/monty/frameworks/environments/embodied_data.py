@@ -68,7 +68,7 @@ class EnvironmentDataset(Dataset):
         n_actions_per_epoch: Number of actions per epoch. Used to determine
             the number of observations this dataset will return per epoch. It can be
             viewed as the dataset size.
-        transform: Callable used to tranform the observations returned by the dataset
+        transform: Callable used to transform the observations returned by the dataset
 
     Note:
         Main idea is to separate concerns:

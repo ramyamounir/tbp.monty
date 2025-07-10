@@ -681,6 +681,58 @@ class TwoLMStackedDistantMountConfig:
 
 
 @dataclass
+class FiveLMStackedDistantMountConfig:
+    # Five sensor patches at the same location with different receptive field sizes
+    agent_id: Union[str, None] = "agent_id_0"
+    sensor_ids: Union[List[str], None] = field(
+        default_factory=lambda: [
+            "patch_0",
+            "patch_1",
+            "patch_2",
+            "patch_3",
+            "patch_4",
+            "view_finder",
+        ]
+    )
+    height: Union[float, None] = 0.0
+    position: List[Union[int, float]] = field(default_factory=lambda: [0.0, 1.5, 0.2])
+    resolutions: List[List[Union[int, float]]] = field(
+        default_factory=lambda: [
+            [64, 64],
+            [64, 64],
+            [64, 64],
+            [64, 64],
+            [64, 64],
+            [64, 64],
+        ]
+    )
+    positions: List[List[Union[int, float]]] = field(
+        default_factory=lambda: [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ]
+    )
+    rotations: List[List[Union[int, float]]] = field(
+        default_factory=lambda: [
+            [1.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0, 0.0],
+        ]
+    )
+    semantics: List[List[Union[int, float]]] = field(
+        default_factory=lambda: [False, False, False, False, False, False]
+    )
+    zooms: List[float] = field(default_factory=lambda: [10.0, 8.0, 6.0, 4.0, 2.0, 1.0])
+
+
+@dataclass
 class TwoLMStackedSurfaceMountConfig(TwoLMStackedDistantMountConfig):
     action_space_type: str = "surface_agent"
 

@@ -53,6 +53,9 @@ from tbp.monty.frameworks.loggers.wandb_handlers import (
 )
 from tbp.monty.frameworks.models.abstract_monty_classes import Monty
 from tbp.monty.frameworks.models.displacement_matching import DisplacementGraphLM
+from tbp.monty.frameworks.models.evidence_matching.learning_module import (
+    EvidenceGraphLM,
+)
 from tbp.monty.frameworks.models.evidence_matching.model import (
     MontyForEvidenceGraphMatching,
 )
@@ -1113,24 +1116,88 @@ class FiveLMStackedMontyConfig(MontyConfig):
     learning_module_configs: Union[dataclass, Dict] = field(
         default_factory=lambda: dict(
             learning_module_0=dict(
-                learning_module_class=DisplacementGraphLM,
-                learning_module_args=dict(k=5, match_attribute="displacement"),
+                learning_module_class=EvidenceGraphLM,
+                learning_module_args=dict(
+                    max_match_distance=0.001,
+                    tolerances={
+                        "patch_0": {
+                            "hsv": np.array([0.1, 1, 1]),
+                            "principal_curvatures_log": np.ones(2),
+                        }
+                    },
+                    feature_weights={},
+                    max_graph_size=0.2,
+                    num_model_voxels_per_dim=50,
+                    max_nodes_per_graph=50,
+                ),
             ),
             learning_module_1=dict(
-                learning_module_class=DisplacementGraphLM,
-                learning_module_args=dict(k=5, match_attribute="displacement"),
+                learning_module_class=EvidenceGraphLM,
+                learning_module_args=dict(
+                    max_match_distance=0.001,
+                    tolerances={
+                        "patch_1": {
+                            "hsv": np.array([0.1, 1, 1]),
+                            "principal_curvatures_log": np.ones(2),
+                        },
+                        "learning_module_0": {"object_id": 1},
+                    },
+                    feature_weights={"learning_module_0": {"object_id": 1}},
+                    max_graph_size=0.3,
+                    num_model_voxels_per_dim=50,
+                    max_nodes_per_graph=50,
+                ),
             ),
             learning_module_2=dict(
-                learning_module_class=DisplacementGraphLM,
-                learning_module_args=dict(k=5, match_attribute="displacement"),
+                learning_module_class=EvidenceGraphLM,
+                learning_module_args=dict(
+                    max_match_distance=0.001,
+                    tolerances={
+                        "patch_2": {
+                            "hsv": np.array([0.1, 1, 1]),
+                            "principal_curvatures_log": np.ones(2),
+                        },
+                        "learning_module_1": {"object_id": 1},
+                    },
+                    feature_weights={"learning_module_1": {"object_id": 1}},
+                    max_graph_size=0.3,
+                    num_model_voxels_per_dim=50,
+                    max_nodes_per_graph=50,
+                ),
             ),
             learning_module_3=dict(
-                learning_module_class=DisplacementGraphLM,
-                learning_module_args=dict(k=5, match_attribute="displacement"),
+                learning_module_class=EvidenceGraphLM,
+                learning_module_args=dict(
+                    max_match_distance=0.001,
+                    tolerances={
+                        "patch_3": {
+                            "hsv": np.array([0.1, 1, 1]),
+                            "principal_curvatures_log": np.ones(2),
+                        },
+                        "learning_module_2": {"object_id": 1},
+                    },
+                    feature_weights={"learning_module_2": {"object_id": 1}},
+                    max_graph_size=0.3,
+                    num_model_voxels_per_dim=50,
+                    max_nodes_per_graph=50,
+                ),
             ),
             learning_module_4=dict(
-                learning_module_class=DisplacementGraphLM,
-                learning_module_args=dict(k=5, match_attribute="displacement"),
+                learning_module_class=EvidenceGraphLM,
+                learning_module_args=dict(
+                    max_match_distance=0.001,
+                    tolerances={
+                        "patch_4": {
+                            "hsv": np.array([0.1, 1, 1]),
+                            "principal_curvatures_log": np.ones(2),
+                        },
+                        "learning_module_3": {"object_id": 1},
+                    },
+                    feature_weights={"learning_module_3": {"object_id": 1}},
+                    max_graph_size=0.3,
+                    num_model_voxels_per_dim=50,
+                    max_nodes_per_graph=50,
+                ),
             ),
         )
     )
@@ -1152,13 +1219,106 @@ class FiveLMStackedMontyConfig(MontyConfig):
                         "principal_curvatures_log",
                         "gaussian_curvature",
                         "mean_curvature",
+                        "mean_depth",
                         "gaussian_curvature_sc",
                         "mean_curvature_sc",
                     ],
-                    save_raw_obs=True,
+                    save_raw_obs=False,
                 ),
             ),
             sensor_module_1=dict(
+                sensor_module_class=HabitatDistantPatchSM,
+                sensor_module_args=dict(
+                    sensor_module_id="patch_1",
+                    features=[
+                        # morphological features (nescessarry)
+                        "pose_vectors",
+                        "pose_fully_defined",
+                        "on_object",
+                        # non-morphological features (optional)
+                        "object_coverage",
+                        "hsv",
+                        "principal_curvatures",
+                        "principal_curvatures_log",
+                        "gaussian_curvature",
+                        "mean_curvature",
+                        "mean_depth",
+                        "gaussian_curvature_sc",
+                        "mean_curvature_sc",
+                    ],
+                    save_raw_obs=False,
+                ),
+            ),
+            sensor_module_2=dict(
+                sensor_module_class=HabitatDistantPatchSM,
+                sensor_module_args=dict(
+                    sensor_module_id="patch_2",
+                    features=[
+                        # morphological features (nescessarry)
+                        "pose_vectors",
+                        "pose_fully_defined",
+                        "on_object",
+                        # non-morphological features (optional)
+                        "object_coverage",
+                        "hsv",
+                        "principal_curvatures",
+                        "principal_curvatures_log",
+                        "gaussian_curvature",
+                        "mean_curvature",
+                        "mean_depth",
+                        "gaussian_curvature_sc",
+                        "mean_curvature_sc",
+                    ],
+                    save_raw_obs=False,
+                ),
+            ),
+            sensor_module_3=dict(
+                sensor_module_class=HabitatDistantPatchSM,
+                sensor_module_args=dict(
+                    sensor_module_id="patch_3",
+                    features=[
+                        # morphological features (nescessarry)
+                        "pose_vectors",
+                        "pose_fully_defined",
+                        "on_object",
+                        # non-morphological features (optional)
+                        "object_coverage",
+                        "hsv",
+                        "principal_curvatures",
+                        "principal_curvatures_log",
+                        "gaussian_curvature",
+                        "mean_curvature",
+                        "mean_depth",
+                        "gaussian_curvature_sc",
+                        "mean_curvature_sc",
+                    ],
+                    save_raw_obs=False,
+                ),
+            ),
+            sensor_module_4=dict(
+                sensor_module_class=HabitatDistantPatchSM,
+                sensor_module_args=dict(
+                    sensor_module_id="patch_4",
+                    features=[
+                        # morphological features (nescessarry)
+                        "pose_vectors",
+                        "pose_fully_defined",
+                        "on_object",
+                        # non-morphological features (optional)
+                        "object_coverage",
+                        "hsv",
+                        "principal_curvatures",
+                        "principal_curvatures_log",
+                        "gaussian_curvature",
+                        "mean_curvature",
+                        "mean_depth",
+                        "gaussian_curvature_sc",
+                        "mean_curvature_sc",
+                    ],
+                    save_raw_obs=False,
+                ),
+            ),
+            sensor_module_5=dict(
                 # No need to extract features from the view finder since it is not
                 # connected to a learning module (just used at beginning of episode)
                 sensor_module_class=DetailedLoggingSM,
@@ -1175,16 +1335,20 @@ class FiveLMStackedMontyConfig(MontyConfig):
     sm_to_agent_dict: Dict = field(
         default_factory=lambda: dict(
             patch_0="agent_id_0",
+            patch_1="agent_id_0",
+            patch_2="agent_id_0",
+            patch_3="agent_id_0",
+            patch_4="agent_id_0",
             view_finder="agent_id_0",
         )
     )
     sm_to_lm_matrix: List = field(
         default_factory=lambda: [
             [0],
-            [],
-            [],
-            [],
-            [],
+            [1],
+            [2],
+            [3],
+            [4],
         ],  # View finder (sm1) not connected to lm
     )
     # First LM only gets sensory input, second gets input from first + sensor

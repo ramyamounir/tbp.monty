@@ -12,6 +12,7 @@ from typing import Callable, Dict, List, Mapping, Union
 
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
     FiveLMMountConfig,
+    FiveLMStackedDistantMountConfig,
     MultiLMMountConfig,
     PatchAndViewFinderMountConfig,
     PatchAndViewFinderMountLowResConfig,
@@ -379,9 +380,25 @@ class EnvInitArgsTwoLMDistantStackedMount(EnvInitArgs):
 
 
 @dataclass
+class EnvInitArgsFiveLMDistantStackedMount(EnvInitArgs):
+    agents: List[AgentConfig] = field(
+        default_factory=lambda: [
+            AgentConfig(MultiSensorAgent, FiveLMStackedDistantMountConfig().__dict__)
+        ]
+    )
+
+
+@dataclass
 class TwoLMStackedDistantMountHabitatDatasetArgs(MultiLMMountHabitatDatasetArgs):
     env_init_args: Dict = field(
         default_factory=lambda: EnvInitArgsTwoLMDistantStackedMount().__dict__
+    )
+
+
+@dataclass
+class FiveLMStackedDistantMountHabitatDatasetArgs(MultiLMMountHabitatDatasetArgs):
+    env_init_args: Dict = field(
+        default_factory=lambda: EnvInitArgsFiveLMDistantStackedMount().__dict__
     )
 
 
