@@ -56,8 +56,11 @@ for exp_name, cfg in asdict(experiments).items():
 # Varying window size
 resampling_ycb_window_experiments = {}
 for exp_name, cfg in asdict(experiments).items():
-    if exp_name == "randrot_noise_10distinctobj_dist_agent":
-        for window in [3, 5, 7, 9]:
+    if exp_name in [
+        "randrot_noise_10distinctobj_dist_agent",
+        "base_config_10distinctobj_dist_agent",
+    ]:
+        for window in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
             mod_exp_name = "resampling_" + exp_name + "_" + str(window) + "window"
             mod_cfg = deepcopy(cfg)
 
@@ -161,17 +164,65 @@ experiments = ResamplingYcbExperiments(
     resampling_randrot_noise_77obj_dist_agent_9reduction=resampling_ycb_reduced_experiments[
         "resampling_randrot_noise_77obj_dist_agent_9reduction"
     ],
-    resampling_randrot_noise_10distinctobj_dist_agent_3window=resampling_ycb_window_experiments[
-        "resampling_randrot_noise_10distinctobj_dist_agent_3window"
+    resampling_randrot_noise_10distinctobj_dist_agent_10window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_10window"
     ],
-    resampling_randrot_noise_10distinctobj_dist_agent_5window=resampling_ycb_window_experiments[
-        "resampling_randrot_noise_10distinctobj_dist_agent_5window"
+    resampling_randrot_noise_10distinctobj_dist_agent_20window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_20window"
     ],
-    resampling_randrot_noise_10distinctobj_dist_agent_7window=resampling_ycb_window_experiments[
-        "resampling_randrot_noise_10distinctobj_dist_agent_7window"
+    resampling_randrot_noise_10distinctobj_dist_agent_30window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_30window"
     ],
-    resampling_randrot_noise_10distinctobj_dist_agent_9window=resampling_ycb_window_experiments[
-        "resampling_randrot_noise_10distinctobj_dist_agent_9window"
+    resampling_randrot_noise_10distinctobj_dist_agent_40window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_40window"
+    ],
+    resampling_randrot_noise_10distinctobj_dist_agent_50window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_50window"
+    ],
+    resampling_randrot_noise_10distinctobj_dist_agent_60window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_60window"
+    ],
+    resampling_randrot_noise_10distinctobj_dist_agent_70window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_70window"
+    ],
+    resampling_randrot_noise_10distinctobj_dist_agent_80window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_80window"
+    ],
+    resampling_randrot_noise_10distinctobj_dist_agent_90window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_90window"
+    ],
+    resampling_randrot_noise_10distinctobj_dist_agent_100window=resampling_ycb_window_experiments[
+        "resampling_randrot_noise_10distinctobj_dist_agent_100window"
+    ],
+    resampling_base_config_10distinctobj_dist_agent_10window=resampling_ycb_window_experiments[
+        "resampling_base_config_10distinctobj_dist_agent_10window"
+    ],
+    resampling_base_config_10distinctobj_dist_agent_20window=resampling_ycb_window_experiments[
+        "resampling_base_config_10distinctobj_dist_agent_20window"
+    ],
+    resampling_base_config_10distinctobj_dist_agent_30window=resampling_ycb_window_experiments[
+        "resampling_base_config_10distinctobj_dist_agent_30window"
+    ],
+    resampling_base_config_10distinctobj_dist_agent_40window=resampling_ycb_window_experiments[
+        "resampling_base_config_10distinctobj_dist_agent_40window"
+    ],
+    resampling_base_config_10distinctobj_dist_agent_50window=resampling_ycb_window_experiments[
+        "resampling_base_config_10distinctobj_dist_agent_50window"
+    ],
+    resampling_base_config_10distinctobj_dist_agent_60window=resampling_ycb_window_experiments[
+        "resampling_base_config_10distinctobj_dist_agent_60window"
+    ],
+    resampling_base_config_10distinctobj_dist_agent_70window=resampling_ycb_window_experiments[
+        "resampling_base_config_10distinctobj_dist_agent_70window"
+    ],
+    resampling_base_config_10distinctobj_dist_agent_80window=resampling_ycb_window_experiments[
+        "resampling_base_config_10distinctobj_dist_agent_80window"
+    ],
+    resampling_base_config_10distinctobj_dist_agent_90window=resampling_ycb_window_experiments[
+        "resampling_base_config_10distinctobj_dist_agent_90window"
+    ],
+    resampling_base_config_10distinctobj_dist_agent_100window=resampling_ycb_window_experiments[
+        "resampling_base_config_10distinctobj_dist_agent_100window"
     ],
 )
 CONFIGS = asdict(experiments)
