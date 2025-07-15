@@ -90,7 +90,7 @@ class ResamplingHypothesesUpdater:
         hypotheses_count_multiplier: float = 1.0,
         hypotheses_existing_to_new_ratio: float = 0.1,
         hypotheses_space_reduction_factor: float = 1.0,
-        slope_tracker_window_size: int = 6,
+        slope_tracker_window_size: int = 40,
         initial_possible_poses: Literal["uniform", "informed"]
         | list[Rotation] = "informed",
         max_nneighbors: int = 3,
