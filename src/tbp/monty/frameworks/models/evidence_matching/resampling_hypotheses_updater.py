@@ -88,7 +88,7 @@ class ResamplingHypothesesUpdater:
             DefaultFeaturesForMatchingSelector
         ),
         hypotheses_count_multiplier: float = 1.0,
-        hypotheses_existing_to_new_ratio: float = 0.1,
+        hypotheses_existing_to_new_ratio: float = 0.15,
         hypotheses_space_reduction_factor: float = 1.0,
         slope_tracker_window_size: int = 40,
         initial_possible_poses: Literal["uniform", "informed"]
@@ -388,8 +388,8 @@ class ResamplingHypothesesUpdater:
             new_informed = needed - existing_maintained
 
         return (
-            int(existing_maintained),
-            int(new_informed),
+            round(existing_maintained),
+            round(new_informed),
         )
 
     def _sample_existing(
