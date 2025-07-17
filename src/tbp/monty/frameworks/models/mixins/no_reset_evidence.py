@@ -7,6 +7,8 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT.
 
+from __future__ import annotations
+
 from typing import Any, Dict
 
 from scipy.spatial.transform import Rotation
@@ -59,12 +61,30 @@ class TheoreticalLimitLMLoggingMixin:
         Returns:
             Updated statistics dictionary.
         """
+        stats["evidence_slopes"] = self._hypotheses_evidence_slopes(self.primary_target)
+        stats["hypotheses_pose_error"] = self._hypotheses_pose_error(
+            self.primary_target
+        )
+        stats["removable_hypotheses"] = self.hypotheses_updater.evidence_slope_trackers[
+            self.primary_target
+        ].removable_indices_mask("patch")
         stats["max_evidence"] = {k: max(v) for k, v in self.evidence.items()}
         stats["target_object_theoretical_limit"] = (
             self._theoretical_limit_target_object_pose_error()
         )
         stats["target_object_pose_error"] = self._mlh_target_object_pose_error()
         return stats
+
+    def _hypotheses_evidence_slopes(self, graph_id: str) -> list[float]:
+        return self.hypotheses_updater.evidence_slope_trackers[
+            graph_id
+        ]._calculate_slopes("patch")
+
+    def _hypotheses_pose_error(self, graph_id: str) -> list[float]:
+        hyp_rotations = Rotation.from_matrix(self.possible_poses[graph_id]).inv()
+        target_rotation = Rotation.from_quat(self.primary_target_rotation_quat)
+        errors = (hyp_rotations * target_rotation.inv()).magnitude()
+        return errors
 
     def _theoretical_limit_target_object_pose_error(self) -> float:
         """Compute the theoretical minimum rotation error on the target object.
