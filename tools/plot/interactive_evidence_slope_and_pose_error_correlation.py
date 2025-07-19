@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -43,9 +44,9 @@ settings.default_font = "Theemim"
 settings.window_splitting_position = 0.5
 
 HUE_PALETTE = {
-    "added": "#66c2a5",
-    "removed": "#fc8d62",
-    "maintained": "#8da0cb",
+    "Added": "#66c2a5",
+    "Removed": "#fc8d62",
+    "Maintained": "#8da0cb",
 }
 
 
@@ -127,7 +128,7 @@ class CorrelationPlot:
                             add_ids
                         ],
                         "Pose Error": np.array(channel_data["pose_errors"])[add_ids],
-                        "kind": "added",
+                        "kind": "Added",
                         "input_channel": input_channel,
                     }
                 )
@@ -150,7 +151,7 @@ class CorrelationPlot:
                             remove_ids
                         ],
                         "Pose Error": np.array(prev_channel["pose_errors"])[remove_ids],
-                        "kind": "removed",
+                        "kind": "Removed",
                         "input_channel": input_channel,
                     }
                 )
@@ -168,7 +169,7 @@ class CorrelationPlot:
                         "Pose Error": np.array(channel_data["pose_errors"])[
                             maintained_ids
                         ],
-                        "kind": "maintained",
+                        "kind": "Maintained",
                         "input_channel": input_channel,
                     }
                 )
@@ -242,6 +243,7 @@ class CorrelationPlot:
         df = self._data_at_ix(episode=episode, step=step, graph_id=graph_id)
         img = self.create_figure(df)
         self.fig = Image(img)
+        plt.close(img)
         plotter.add(self.fig)
 
     def cam_dict(self) -> dict[str, tuple[float, float, float]]:
@@ -281,7 +283,7 @@ class InteractivePlot:
         self,
         exp_path: str,
         learning_module: str,
-        throttle_time: float = 0.2,
+        throttle_time: float = 0.3,
     ):
         self.throttle_time = throttle_time
         self.data_extractor = DataExtractor(exp_path, learning_module)
@@ -317,7 +319,7 @@ class InteractivePlot:
         self.step_curr_slider_val = None
         self.step_last_call_time = time.time()
 
-        self.plotter.at(0).add_button(
+        self.primary_button = self.plotter.at(0).add_button(
             self.primary_button_callback,
             pos=(0.85, 0.6),
             states=["Primary Target"],
@@ -326,7 +328,7 @@ class InteractivePlot:
             bold=True,
         )
 
-        self.plotter.at(0).add_button(
+        self.previous_button = self.plotter.at(0).add_button(
             self.previous_button_callback,
             pos=(0.83, 0.53),
             states=["<"],
@@ -334,7 +336,7 @@ class InteractivePlot:
             font="Calco",
             bold=True,
         )
-        self.plotter.at(0).add_button(
+        self.next_button = self.plotter.at(0).add_button(
             self.next_button_callback,
             pos=(0.88, 0.53),
             states=[">"],
@@ -394,8 +396,10 @@ class InteractivePlot:
             self.episode_curr_slider_val = episode_val
             self.episode_last_call_time = time.time()
 
-            self.step_slider.representation.SetValue(0)
-            self.step_slider_callback(self.step_slider, "force_run")
+            self.primary_button_callback(self.primary_button, "")
+
+            # self.step_slider.representation.SetValue(0)
+            # self.step_slider_callback(self.step_slider, "force_run")
 
     def step_slider_callback(self, widget: Slider2D, event: str) -> None:
         """Respond to episode change by updating the visualization.
