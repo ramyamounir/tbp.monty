@@ -19,10 +19,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import trimesh
 from pandas import DataFrame
+from scipy.spatial import cKDTree
 from vedo import (
     Button,
+    Circle,
     Image,
+    Mesh,
     Plotter,
     Text2D,
     settings,
@@ -50,11 +54,21 @@ HUE_PALETTE = {
 }
 
 
+def get_closest_row(df: pd.DataFrame, slope: float, error: float) -> pd.Series:
+    if df.empty:
+        raise ValueError("DataFrame is empty.")
+    tree = cKDTree(df[["Evidence Slope", "Pose Error"]].values)
+    dist, idx = tree.query([slope, error])
+    return df.iloc[idx]
+
+
 class DataExtractor:
     """Extracts and processes data from JSON logs of unsupervised inference experiments.
 
     Args:
         exp_path: Path to the experiment directory.
+        data_path: Path to the root directory containing object meshes.
+            default set to `~/tbp/data/habitat/objects/ycb/meshes`
         learning_module: Which learning module to use for data extraction.
 
     Attributes:
@@ -65,13 +79,17 @@ class DataExtractor:
             and more.
     """
 
-    def __init__(self, exp_path: str, learning_module: str):
+    def __init__(self, exp_path: str, data_path: str, learning_module: str):
         self.exp_path = exp_path
+        self.data_path = data_path
         self.lm = learning_module
+
         self.read_data()
+        self.import_objects()
 
     def read_data(self) -> None:
         _, _, self.data, _ = load_stats(self.exp_path, False, False, True, False)
+        self.object_names = set(self.__getitem__(0)[0].keys())
 
     def resolve_primary(self, episode: int):
         return self.data[str(episode)]["target"]["primary_target_object"]
@@ -87,6 +105,63 @@ class DataExtractor:
             ix = str(ix)
 
         return self.data[ix][self.lm]["resampling_stats"]
+
+    def _find_glb_file(self, obj_name: str) -> str:
+        """Search for the .glb.orig file of a given YCB object in a directory.
+
+        Args:
+            obj_name: The object name to search for (e.g., "potted_meat_can").
+
+        Returns:
+            Full path to the .glb.orig file.
+
+        Raises:
+            FileNotFoundError: If the .glb.orig file for the object is not found.
+
+        """
+        for path in Path(self.data_path).rglob("*"):
+            if path.is_dir() and path.name.endswith(obj_name):
+                glb_orig_path = path / "google_16k" / "textured.glb.orig"
+                if glb_orig_path.exists():
+                    return str(glb_orig_path)
+
+        raise FileNotFoundError(
+            f"Could not find .glb.orig file for '{obj_name}' in '{self.data_path}'"
+        )
+
+    def create_mesh(self, obj_name: str) -> Mesh:
+        """Reads a 3D object file in glb format and returns a Vedo Mesh object.
+
+        Args:
+            obj_name: Name of the object to load.
+
+        Returns:
+            vedo.Mesh object with UV texture and transformed orientation.
+        """
+        file_path = self._find_glb_file(obj_name)
+        with open(file_path, "rb") as f:
+            mesh = trimesh.load_mesh(f, file_type="glb")
+
+        # create mesh from vertices and faces
+        obj = Mesh([mesh.vertices, mesh.faces])
+
+        # add texture
+        obj.texture(
+            tname=np.array(mesh.visual.material.baseColorTexture),
+            tcoords=mesh.visual.uv,
+        )
+
+        # Shift to geometry mean and rotate to the up/front of the glb
+        obj.shift(-np.mean(obj.bounds().reshape(3, 2), axis=1))
+        obj.rotate_x(-90)
+
+        return obj
+
+    def import_objects(self) -> None:
+        """Load all unique object meshes into memory."""
+        self.imported_objects = {
+            obj_name: self.create_mesh(obj_name) for obj_name in self.object_names
+        }
 
     def __len__(self) -> int:
         return len(self.data)
@@ -127,6 +202,9 @@ class CorrelationPlot:
                         "Evidence Slope": np.array(channel_data["evidence_slopes"])[
                             add_ids
                         ],
+                        "Rot_x": np.array(channel_data["rotations"])[add_ids][:, 0],
+                        "Rot_y": np.array(channel_data["rotations"])[add_ids][:, 1],
+                        "Rot_z": np.array(channel_data["rotations"])[add_ids][:, 2],
                         "Pose Error": np.array(channel_data["pose_errors"])[add_ids],
                         "kind": "Added",
                         "input_channel": input_channel,
@@ -150,6 +228,9 @@ class CorrelationPlot:
                         "Evidence Slope": np.array(prev_channel["evidence_slopes"])[
                             remove_ids
                         ],
+                        "Rot_x": np.array(prev_channel["rotations"])[remove_ids][:, 0],
+                        "Rot_y": np.array(prev_channel["rotations"])[remove_ids][:, 1],
+                        "Rot_z": np.array(prev_channel["rotations"])[remove_ids][:, 2],
                         "Pose Error": np.array(prev_channel["pose_errors"])[remove_ids],
                         "kind": "Removed",
                         "input_channel": input_channel,
@@ -165,6 +246,15 @@ class CorrelationPlot:
                     {
                         "Evidence Slope": np.array(channel_data["evidence_slopes"])[
                             maintained_ids
+                        ],
+                        "Rot_x": np.array(channel_data["rotations"])[maintained_ids][
+                            :, 0
+                        ],
+                        "Rot_y": np.array(channel_data["rotations"])[maintained_ids][
+                            :, 1
+                        ],
+                        "Rot_z": np.array(channel_data["rotations"])[maintained_ids][
+                            :, 2
                         ],
                         "Pose Error": np.array(channel_data["pose_errors"])[
                             maintained_ids
@@ -263,6 +353,7 @@ class InteractivePlot:
 
     Args:
         exp_path: Path to the JSON directory containing detailed run statistics.
+        data_path: Path to the root directory of YCB object meshes.
         learning_module: Which learning module to use for data extraction.
         throttle_time: Minimum delay between slider callbacks (seconds).
             Defaults to 0.2 seconds.
@@ -282,11 +373,12 @@ class InteractivePlot:
     def __init__(
         self,
         exp_path: str,
+        data_path: str,
         learning_module: str,
         throttle_time: float = 0.3,
     ):
         self.throttle_time = throttle_time
-        self.data_extractor = DataExtractor(exp_path, learning_module)
+        self.data_extractor = DataExtractor(exp_path, data_path, learning_module)
 
         self.correlation_plotter = CorrelationPlot(
             data_extractor=self.data_extractor, renderer_ix=0
@@ -300,7 +392,7 @@ class InteractivePlot:
             xmin=0,
             xmax=len(self.data_extractor) - 1,
             value=0,
-            pos=[(0.2, 0.2), (0.8, 0.2)],
+            pos=[(0.1, 0.2), (0.7, 0.2)],
             title="Episode",
         )
 
@@ -312,7 +404,7 @@ class InteractivePlot:
             xmin=0,
             xmax=len(self.data_extractor[0]) - 1,
             value=0,
-            pos=[(0.2, 0.1), (0.8, 0.1)],
+            pos=[(0.1, 0.1), (0.7, 0.1)],
             title="Step",
         )
 
@@ -321,7 +413,7 @@ class InteractivePlot:
 
         self.primary_button = self.plotter.at(0).add_button(
             self.primary_button_callback,
-            pos=(0.85, 0.6),
+            pos=(0.85, 0.2),
             states=["Primary Target"],
             size=30,
             font="Calco",
@@ -330,7 +422,7 @@ class InteractivePlot:
 
         self.previous_button = self.plotter.at(0).add_button(
             self.previous_button_callback,
-            pos=(0.83, 0.53),
+            pos=(0.83, 0.13),
             states=["<"],
             size=30,
             font="Calco",
@@ -338,7 +430,7 @@ class InteractivePlot:
         )
         self.next_button = self.plotter.at(0).add_button(
             self.next_button_callback,
-            pos=(0.88, 0.53),
+            pos=(0.88, 0.13),
             states=[">"],
             size=30,
             font="Calco",
@@ -348,7 +440,7 @@ class InteractivePlot:
         self.current_graph = self.data_extractor.resolve_primary(0)
         self.current_graph_label = Text2D(
             txt=self.current_graph,
-            pos=(0.85, 0.66),
+            pos=(0.85, 0.26),
             s=1.2,
             font="Calco",
             justify="center",
@@ -356,6 +448,88 @@ class InteractivePlot:
             c="black",
         )
         self.plotter.at(0).add(self.current_graph_label)
+        self.current_graph_object = self.data_extractor.imported_objects[
+            self.current_graph
+        ].clone(deep=True)
+        self.plotter.at(0).add(self.current_graph_object.scale(2000).pos(-200, 250))
+        self.predicted_graph_object = None
+
+        self.highlight_circle = None
+        self.plotter.add_callback("LeftButtonPress", self.on_scatter_click)
+
+    def highlight_point(self, slope: float, error: float):
+        if self.highlight_circle:
+            self.plotter.remove(self.highlight_circle)
+
+        pos = self.map_data_coords_to_world(slope, error)
+        self.highlight_circle = Circle(pos=pos, r=3.0, res=16).c("red")
+        self.plotter.add(self.highlight_circle)
+        self.plotter.render()
+
+    def map_click_to_data_coords(self, click_point: np.ndarray) -> tuple[float, float]:
+        xmin, xmax, ymin, ymax = 74, 496, 64, 496
+        xlim = [-2.0, 2.0]
+        ylim = [0, 3.25]
+
+        # Normalize click to image coordinate
+        x_rel = (click_point[0] - xmin) / (xmax - xmin)
+        y_rel = (click_point[1] - ymin) / (ymax - ymin)
+
+        # Map to data coordinate space
+        slope = xlim[0] + x_rel * (xlim[1] - xlim[0])
+        error = ylim[0] + y_rel * (ylim[1] - ylim[0])
+
+        return slope, error
+
+    def map_data_coords_to_world(
+        self, slope: float, error: float
+    ) -> tuple[float, float, float]:
+        xmin, xmax, ymin, ymax = 74, 496, 64, 496
+        xlim = [-2.0, 2.0]
+        ylim = [0, 3.25]
+
+        x_rel = (slope - xlim[0]) / (xlim[1] - xlim[0])
+        y_rel = (error - ylim[0]) / (ylim[1] - ylim[0])
+
+        x_world = xmin + x_rel * (xmax - xmin)
+        y_world = ymin + y_rel * (ymax - ymin)
+        return x_world, y_world, 0.1
+
+    def on_scatter_click(self, event):
+        if event.picked3d is None:
+            return
+
+        # Ignore clicks outside of scatter plot limits
+        (slope, error) = self.map_click_to_data_coords(event.picked3d)
+        if not -2.0 <= slope <= 2.0 or not 0 <= error <= 3.25:
+            return
+
+        episode = round(self.episode_slider.GetRepresentation().GetValue())
+        step = round(self.step_slider.GetRepresentation().GetValue())
+        graph_id = self.current_graph
+
+        # Get current dataframe
+        df = self.correlation_plotter._data_at_ix(episode, step, graph_id)
+
+        # Get closest point
+        closest = get_closest_row(df, slope, error)
+        self.highlight_point(closest["Evidence Slope"], closest["Pose Error"])
+
+        if self.predicted_graph_object:
+            self.plotter.remove(self.predicted_graph_object)
+        self.predicted_graph_object = self.data_extractor.imported_objects[
+            graph_id
+        ].clone(deep=True)
+        self.predicted_graph_object.shift(
+            -np.mean(self.predicted_graph_object.bounds().reshape(3, 2), axis=1)
+        )
+        self.predicted_graph_object.rotate_x(closest["Rot_x"], rad=True).rotate_y(
+            closest["Rot_y"], rad=True
+        ).rotate_z(closest["Rot_z"], rad=True)
+        self.predicted_graph_object.scale(2000)
+        self.predicted_graph_object.shift(840, 250)
+
+        self.plotter.at(0).add(self.predicted_graph_object)
 
     def primary_button_callback(self, widget: Button, _event: str) -> None:
         episode_val = round(self.episode_slider.GetRepresentation().GetValue())
@@ -363,6 +537,15 @@ class InteractivePlot:
         if resolved_graph != self.current_graph:
             self.current_graph = resolved_graph
             self.current_graph_label.text(self.current_graph)
+
+            # Replace primary object
+            if self.current_graph_object:
+                self.plotter.remove(self.current_graph_object)
+            self.current_graph_object = self.data_extractor.imported_objects[
+                self.current_graph
+            ].clone(deep=True)
+            self.plotter.at(0).add(self.current_graph_object.scale(2000).pos(-200, 250))
+
             self.step_slider.representation.SetValue(0)
             self.step_slider_callback(self.step_slider, "force_run")
 
@@ -398,9 +581,6 @@ class InteractivePlot:
 
             self.primary_button_callback(self.primary_button, "")
 
-            # self.step_slider.representation.SetValue(0)
-            # self.step_slider_callback(self.step_slider, "force_run")
-
     def step_slider_callback(self, widget: Slider2D, event: str) -> None:
         """Respond to episode change by updating the visualization.
 
@@ -419,6 +599,14 @@ class InteractivePlot:
                 step=step_val,
                 graph_id=self.current_graph,
             )
+
+            if self.highlight_circle:
+                self.plotter.remove(self.highlight_circle)
+                self.highlight_circle = None
+
+            if self.predicted_graph_object:
+                self.plotter.remove(self.predicted_graph_object)
+                self.predicted_graph_object = None
 
             self.step_curr_slider_val = step_val
             self.step_last_call_time = time.time()
@@ -440,6 +628,7 @@ class InteractivePlot:
 
 def plot_interactive_evidence_slope_and_pose_error_correlation(
     exp_path: str,
+    data_path: str,
     learning_module: str,
 ) -> int:
     """Interactive visualization for unsupervised inference experiments.
@@ -460,7 +649,9 @@ def plot_interactive_evidence_slope_and_pose_error_correlation(
         logger.error(f"Experiment path not found: {exp_path}")
         return 1
 
-    plot = InteractivePlot(exp_path, learning_module)
+    data_path = str(Path(data_path).expanduser())
+
+    plot = InteractivePlot(exp_path, data_path, learning_module)
     plot.render(resetcam=False)
 
     return 0
@@ -488,6 +679,11 @@ def add_subparser(
         ),
     )
     parser.add_argument(
+        "--objects_mesh_dir",
+        default="~/tbp/data/habitat/objects/ycb/meshes",
+        help=("The directory containing the mesh objects."),
+    )
+    parser.add_argument(
         "-lm",
         "--learning_module",
         default="LM_0",
@@ -496,7 +692,7 @@ def add_subparser(
     parser.set_defaults(
         func=lambda args: sys.exit(
             plot_interactive_evidence_slope_and_pose_error_correlation(
-                args.experiment_log_dir, args.learning_module
+                args.experiment_log_dir, args.objects_mesh_dir, args.learning_module
             )
         )
     )

@@ -87,6 +87,9 @@ class TheoreticalLimitLMLoggingMixin:
         channel_stats["evidence_slopes"] = self._hypotheses_evidence_slopes(
             graph_id, channel_stat.input_channel
         )
+        channel_stats["rotations"] = self._hypotheses_rotations(
+            graph_id, channel_stat.input_channel
+        )
         channel_stats["pose_errors"] = self._hypotheses_pose_errors(
             graph_id, channel_stat.input_channel
         )
@@ -98,6 +101,12 @@ class TheoreticalLimitLMLoggingMixin:
         return self.hypotheses_updater.evidence_slope_trackers[
             graph_id
         ]._calculate_slopes(input_channel)
+
+    def _hypotheses_rotations(self, graph_id: str, input_channel: str) -> list[float]:
+        mapper = self.channel_hypothesis_mapping[graph_id]
+        channel_rotations = mapper.extract(self.possible_poses[graph_id], input_channel)
+        hyp_rotations = Rotation.from_matrix(channel_rotations).inv()
+        return hyp_rotations.as_euler("xyz")
 
     def _hypotheses_pose_errors(self, graph_id: str, input_channel: str) -> list[float]:
         mapper = self.channel_hypothesis_mapping[graph_id]
