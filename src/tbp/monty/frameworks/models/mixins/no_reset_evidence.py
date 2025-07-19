@@ -61,13 +61,7 @@ class TheoreticalLimitLMLoggingMixin:
         Returns:
             Updated statistics dictionary.
         """
-        stats["evidence_slopes"] = self._hypotheses_evidence_slopes(self.primary_target)
-        stats["hypotheses_pose_error"] = self._hypotheses_pose_error(
-            self.primary_target
-        )
-        stats["removable_hypotheses"] = self.hypotheses_updater.evidence_slope_trackers[
-            self.primary_target
-        ].removable_indices_mask("patch")
+        stats["resampling_stats"] = self._calculate_resampling_stats()
         stats["max_evidence"] = {k: max(v) for k, v in self.evidence.items()}
         stats["target_object_theoretical_limit"] = (
             self._theoretical_limit_target_object_pose_error()
@@ -75,16 +69,42 @@ class TheoreticalLimitLMLoggingMixin:
         stats["target_object_pose_error"] = self._mlh_target_object_pose_error()
         return stats
 
-    def _hypotheses_evidence_slopes(self, graph_id: str) -> list[float]:
+    def _calculate_resampling_stats(self):
+        result = {}
+        for graph_id, full_stats in self.hypotheses_updater.resampling_stats.items():
+            result[graph_id] = {
+                channel_stat.input_channel: self._channel_resampling_stats(
+                    graph_id, channel_stat
+                )
+                for channel_stat in full_stats
+            }
+        return result
+
+    def _channel_resampling_stats(self, graph_id, channel_stat):
+        channel_stats = {}
+        channel_stats["remove_ids"] = channel_stat.removed_hypotheses_ids
+        channel_stats["add_ids"] = channel_stat.added_hypotheses_ids
+        channel_stats["evidence_slopes"] = self._hypotheses_evidence_slopes(
+            graph_id, channel_stat.input_channel
+        )
+        channel_stats["pose_errors"] = self._hypotheses_pose_errors(
+            graph_id, channel_stat.input_channel
+        )
+        return channel_stats
+
+    def _hypotheses_evidence_slopes(
+        self, graph_id: str, input_channel: str
+    ) -> list[float]:
         return self.hypotheses_updater.evidence_slope_trackers[
             graph_id
-        ]._calculate_slopes("patch")
+        ]._calculate_slopes(input_channel)
 
-    def _hypotheses_pose_error(self, graph_id: str) -> list[float]:
-        hyp_rotations = Rotation.from_matrix(self.possible_poses[graph_id]).inv()
+    def _hypotheses_pose_errors(self, graph_id: str, input_channel: str) -> list[float]:
+        mapper = self.channel_hypothesis_mapping[graph_id]
+        channel_rotations = mapper.extract(self.possible_poses[graph_id], input_channel)
+        hyp_rotations = Rotation.from_matrix(channel_rotations).inv()
         target_rotation = Rotation.from_quat(self.primary_target_rotation_quat)
-        errors = (hyp_rotations * target_rotation.inv()).magnitude()
-        return errors
+        return (hyp_rotations * target_rotation.inv()).magnitude()
 
     def _theoretical_limit_target_object_pose_error(self) -> float:
         """Compute the theoretical minimum rotation error on the target object.

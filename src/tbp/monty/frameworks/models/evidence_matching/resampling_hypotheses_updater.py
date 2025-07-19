@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal, Tuple, Type
 
 import numpy as np
@@ -46,6 +47,25 @@ from tbp.monty.frameworks.utils.graph_matching_utils import (
 from tbp.monty.frameworks.utils.spatial_arithmetics import (
     align_multiple_orthonormal_vectors,
 )
+
+
+@dataclass
+class ChannelResamplingStats:
+    """Set of resampling statistics for logging into buffer.
+
+    This class stores which hypotheses have been removed or added
+    at the current step for a specific input channel. This information
+    will be sent back to the LM to potentially be logged in the buffer.
+
+    Note that the `removed_hypotheses_ids` are no longer available at the
+    current step as they have been removed from the `channel_hypotheses`. They
+    can however be used as indices for the hypotheses space at the previous
+    timestep.
+    """
+
+    input_channel: str
+    removed_hypotheses_ids: np.ndarray
+    added_hypotheses_ids: np.ndarray
 
 
 class ResamplingHypothesesUpdater:
@@ -181,6 +201,9 @@ class ResamplingHypothesesUpdater:
         # Dictionary of slope trackers, one for each graph_id
         self.evidence_slope_trackers: dict[str, EvidenceSlopeTracker] = {}
 
+        # Dictionary of resampling statistics, one for each graph_id
+        self.resampling_stats: dict[str, list[ChannelResamplingStats]] = {}
+
     def update_hypotheses(
         self,
         hypotheses: Hypotheses,
@@ -221,6 +244,7 @@ class ResamplingHypothesesUpdater:
         )
 
         hypotheses_updates = []
+        resampling_stats = []
 
         for input_channel in input_channels_to_use:
             # Calculate sample count for each type
@@ -233,7 +257,7 @@ class ResamplingHypothesesUpdater:
             )
 
             # Sample hypotheses based on their type
-            existing_hypotheses = self._sample_existing(
+            existing_hypotheses, remove_ids = self._sample_existing(
                 existing_count=existing_count,
                 hypotheses=hypotheses,
                 input_channel=input_channel,
@@ -275,8 +299,25 @@ class ResamplingHypothesesUpdater:
             )
             hypotheses_updates.append(channel_hypotheses)
 
+            # Update resampling statistics
+            resampling_stats.append(
+                ChannelResamplingStats(
+                    input_channel=input_channel,
+                    removed_hypotheses_ids=remove_ids,
+                    added_hypotheses_ids=(
+                        np.arange(len(channel_hypotheses.evidence))[
+                            -len(informed_hypotheses.evidence) :
+                        ]
+                        if len(informed_hypotheses.evidence) > 0
+                        else np.array([], dtype=int)
+                    ),
+                )
+            )
+
             # Update tracker evidence
             tracker.update(channel_hypotheses.evidence, input_channel)
+
+        self.resampling_stats[graph_id] = resampling_stats
 
         return hypotheses_updates
 
@@ -401,14 +442,16 @@ class ResamplingHypothesesUpdater:
         # Return empty arrays for no hypotheses to sample
         if existing_count == 0:
             # Clear all channel hypotheses from the tracker
+            remove_ids = np.arange(tracker.total_size(input_channel))
             tracker.clear_hyp(input_channel)
 
-            return ChannelHypotheses(
+            channel_hypotheses = ChannelHypotheses(
                 input_channel=input_channel,
                 locations=np.zeros((0, 3)),
                 poses=np.zeros((0, 3, 3)),
                 evidence=np.zeros(0),
             )
+            return channel_hypotheses, remove_ids
 
         keep_ids, remove_ids = tracker.calculate_keep_and_remove_ids(
             num_keep=existing_count,
@@ -419,12 +462,13 @@ class ResamplingHypothesesUpdater:
         tracker.remove_hyp(remove_ids, input_channel)
 
         channel_hypotheses = mapper.extract_hypotheses(hypotheses, input_channel)
-        return ChannelHypotheses(
+        maintained_channel_hypotheses = ChannelHypotheses(
             input_channel=channel_hypotheses.input_channel,
             locations=channel_hypotheses.locations[keep_ids],
             poses=channel_hypotheses.poses[keep_ids],
             evidence=channel_hypotheses.evidence[keep_ids],
         )
+        return maintained_channel_hypotheses, remove_ids
 
     def _sample_informed(
         self,
