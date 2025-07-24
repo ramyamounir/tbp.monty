@@ -523,9 +523,9 @@ class InteractivePlot:
         self.predicted_graph_object.shift(
             -np.mean(self.predicted_graph_object.bounds().reshape(3, 2), axis=1)
         )
-        self.predicted_graph_object.rotate_x(closest["Rot_x"], rad=True).rotate_y(
-            closest["Rot_y"], rad=True
-        ).rotate_z(closest["Rot_z"], rad=True)
+        self.predicted_graph_object.rotate_x(closest["Rot_x"]).rotate_y(
+            closest["Rot_y"]
+        ).rotate_z(closest["Rot_z"])
         self.predicted_graph_object.scale(2000)
         self.predicted_graph_object.shift(840, 250)
 

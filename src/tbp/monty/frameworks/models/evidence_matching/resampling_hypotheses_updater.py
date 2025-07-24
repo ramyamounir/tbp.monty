@@ -51,7 +51,7 @@ from tbp.monty.frameworks.utils.spatial_arithmetics import (
 
 @dataclass
 class ChannelResamplingStats:
-    """Set of resampling statistics for logging into buffer.
+    """Set of resampling statistics for logging into the buffer.
 
     This class stores which hypotheses have been removed or added
     at the current step for a specific input channel. This information
@@ -115,6 +115,7 @@ class ResamplingHypothesesUpdater:
         past_weight: float = 1,
         present_weight: float = 1,
         umbilical_num_poses: int = 8,
+        save_stats: bool = False,
     ):
         """Initializes the ResamplingHypothesesUpdater.
 
@@ -161,6 +162,10 @@ class ResamplingHypothesesUpdater:
             umbilical_num_poses: Number of sampled rotations in the direction of
                 the plane perpendicular to the point normal. These are sampled at
                 umbilical points (i.e., points where PC directions are undefined).
+            save_stats: Flag to control if we want to store the resampling statistics.
+                This is currently effective only when using the
+                `TheoreticalLimitLMLoggingMixin` together with a detailed logger.
+                Defaults to False.
         """
         self.feature_evidence_calculator = feature_evidence_calculator
         self.feature_evidence_increment = feature_evidence_increment
@@ -170,6 +175,7 @@ class ResamplingHypothesesUpdater:
         self.initial_possible_poses = get_initial_possible_poses(initial_possible_poses)
         self.tolerances = tolerances
         self.umbilical_num_poses = umbilical_num_poses
+        self.save_stats = save_stats
 
         self.use_features_for_matching = self.features_for_matching_selector.select(
             feature_evidence_increment=self.feature_evidence_increment,
@@ -300,19 +306,20 @@ class ResamplingHypothesesUpdater:
             hypotheses_updates.append(channel_hypotheses)
 
             # Update resampling statistics
-            resampling_stats.append(
-                ChannelResamplingStats(
-                    input_channel=input_channel,
-                    removed_hypotheses_ids=remove_ids,
-                    added_hypotheses_ids=(
-                        np.arange(len(channel_hypotheses.evidence))[
-                            -len(informed_hypotheses.evidence) :
-                        ]
-                        if len(informed_hypotheses.evidence) > 0
-                        else np.array([], dtype=int)
-                    ),
+            if self.save_stats:
+                resampling_stats.append(
+                    ChannelResamplingStats(
+                        input_channel=input_channel,
+                        removed_hypotheses_ids=remove_ids,
+                        added_hypotheses_ids=(
+                            np.arange(len(channel_hypotheses.evidence))[
+                                -len(informed_hypotheses.evidence) :
+                            ]
+                            if len(informed_hypotheses.evidence) > 0
+                            else np.array([], dtype=int)
+                        ),
+                    )
                 )
-            )
 
             # Update tracker evidence
             tracker.update(channel_hypotheses.evidence, input_channel)
