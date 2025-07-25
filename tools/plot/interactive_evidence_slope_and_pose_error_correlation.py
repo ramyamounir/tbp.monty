@@ -104,7 +104,7 @@ class DataExtractor:
         if type(ix) is int:
             ix = str(ix)
 
-        return self.data[ix][self.lm]["resampling_stats"]
+        return self.data[ix][self.lm]["resampling_telemetry"]
 
     def _find_glb_file(self, obj_name: str) -> str:
         """Search for the .glb.orig file of a given YCB object in a directory.
@@ -213,8 +213,8 @@ class CorrelationPlot:
                 all_dfs.append(df_added)
 
             # -- Removed --
-            remove_ids = channel_data.get("remove_ids", [])
-            if len(remove_ids) > 0:
+            removed_ids = channel_data.get("removed_ids", [])
+            if len(removed_ids) > 0:
                 # If step is 0, go to last step of previous episode
                 if step == 0 and episode == 0:
                     break
@@ -226,12 +226,14 @@ class CorrelationPlot:
                 df_removed = DataFrame(
                     {
                         "Evidence Slope": np.array(prev_channel["evidence_slopes"])[
-                            remove_ids
+                            removed_ids
                         ],
-                        "Rot_x": np.array(prev_channel["rotations"])[remove_ids][:, 0],
-                        "Rot_y": np.array(prev_channel["rotations"])[remove_ids][:, 1],
-                        "Rot_z": np.array(prev_channel["rotations"])[remove_ids][:, 2],
-                        "Pose Error": np.array(prev_channel["pose_errors"])[remove_ids],
+                        "Rot_x": np.array(prev_channel["rotations"])[removed_ids][:, 0],
+                        "Rot_y": np.array(prev_channel["rotations"])[removed_ids][:, 1],
+                        "Rot_z": np.array(prev_channel["rotations"])[removed_ids][:, 2],
+                        "Pose Error": np.array(prev_channel["pose_errors"])[
+                            removed_ids
+                        ],
                         "kind": "Removed",
                         "input_channel": input_channel,
                     }
