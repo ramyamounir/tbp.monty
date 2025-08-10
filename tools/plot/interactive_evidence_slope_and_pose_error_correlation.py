@@ -21,6 +21,7 @@ import pandas as pd
 import seaborn as sns
 import trimesh
 from pandas import DataFrame
+from pubsub.core import Publisher
 from scipy.spatial import cKDTree
 from vedo import (
     Button,
@@ -33,6 +34,8 @@ from vedo import (
 )
 
 from tbp.monty.frameworks.utils.logging_utils import load_stats
+from tools.plot.interactive.data import DataParser, YCBMeshLoader
+from tools.plot.interactive.visualizers.mesh_visualizer import PrimaryMeshVisualizer
 
 if TYPE_CHECKING:
     import argparse
@@ -630,6 +633,37 @@ class InteractivePlot:
         )
 
 
+# def plot_interactive_evidence_slope_and_pose_error_correlation(
+#     exp_path: str,
+#     data_path: str,
+#     learning_module: str,
+# ) -> int:
+#     """Interactive visualization for unsupervised inference experiments.
+
+#     This visualization provides a 3-pane renderers to allow for inspecting the objects,
+#     MLH, and sensor locations while stepping through the maximum evidence scores for
+#     each object.
+
+#     Args:
+#         exp_path: Path to the experiment directory containing the detailed stats file.
+#         data_path: Path to the root directory of YCB object meshes.
+#         learning_module: The learning module to use for extracting evidence data.
+
+#     Returns:
+#         Exit code.
+#     """
+#     if not Path(exp_path).exists():
+#         logger.error(f"Experiment path not found: {exp_path}")
+#         return 1
+
+#     data_path = str(Path(data_path).expanduser())
+
+#     plot = InteractivePlot(exp_path, data_path, learning_module)
+#     plot.render(resetcam=False)
+
+#     return 0
+
+
 def plot_interactive_evidence_slope_and_pose_error_correlation(
     exp_path: str,
     data_path: str,
@@ -655,8 +689,26 @@ def plot_interactive_evidence_slope_and_pose_error_correlation(
 
     data_path = str(Path(data_path).expanduser())
 
-    plot = InteractivePlot(exp_path, data_path, learning_module)
-    plot.render(resetcam=False)
+    plotter = Plotter(size=(1000, 1000))
+    parser = DataParser(exp_path)
+    mesh_loader = YCBMeshLoader(data_path)
+    event_bus = Publisher()
+
+    mesh_visualizer = PrimaryMeshVisualizer(
+        name="primary_mesh",
+        plotter=plotter,
+        parser=parser,
+        mesh_loader=mesh_loader,
+        event_bus=event_bus,
+        topic_controllers=["primary_target"],
+    )
+
+    plotter.render(resetcam=False)
+    plotter.show(
+        axes=mesh_visualizer.axes_dict(),
+        resetcam=True,
+        interactive=True,
+    )
 
     return 0
 
