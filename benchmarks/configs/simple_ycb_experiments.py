@@ -7,56 +7,64 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT.
 
+from copy import deepcopy
 from dataclasses import asdict
 
 from benchmarks.configs.names import SimpleYcbExperiments
 from benchmarks.configs.ycb_experiments import experiments
-from tbp.monty.frameworks.config_utils.config_args import (
-    DetailedEvidenceLMLoggingConfig,
-    get_cube_face_and_corner_views_rotations,
-)
-from tbp.monty.frameworks.config_utils.make_dataset_configs import (
-    EnvironmentDataloaderPerObjectArgs,
-    PredefinedObjectInitializer,
-)
-from tbp.monty.frameworks.loggers.monty_handlers import (
-    BasicCSVStatsHandler,
-    DetailedJSONHandler,
-)
 
-test_rotation = get_cube_face_and_corner_views_rotations()[:1]
-
-# Adding Resampling to YCB experiments
+alpha_values = {"alpha1": 0.02, "alpha2": 0.1, "alpha3": 0.3}
 simple_ycb_experiments = {}
+
+# alpha values
 for exp_name, cfg in asdict(experiments).items():
     if exp_name in [
         "base_config_10distinctobj_dist_agent",
         "randrot_noise_10distinctobj_dist_agent",
+        "base_config_10distinctobj_surf_agent",
+        "randrot_noise_10distinctobj_surf_agent",
     ]:
-        mod_exp_name = "simple_" + exp_name
-        mod_cfg = cfg.copy()
+        # Add Alpha Experiments
+        for k, v in alpha_values.items():
+            mod_exp_name = exp_name + "_" + k
+            mod_cfg = deepcopy(cfg)
 
-        mod_cfg["experiment_args"]["n_eval_epochs"] = len(test_rotation)
-        mod_cfg["eval_dataloader_args"] = EnvironmentDataloaderPerObjectArgs(
-            object_names=["mug"],
-            object_init_sampler=PredefinedObjectInitializer(rotations=test_rotation),
-        )
-        mod_cfg["logging_config"] = DetailedEvidenceLMLoggingConfig(
-            monty_handlers=[BasicCSVStatsHandler, DetailedJSONHandler],
-            wandb_handlers=[],
-        )
+            mod_cfg["monty_config"]["learning_module_configs"]["learning_module_0"][
+                "learning_module_args"
+            ]["present_weight"] = v
+            mod_cfg["monty_config"]["learning_module_configs"]["learning_module_0"][
+                "learning_module_args"
+            ]["past_weight"] = 1 - v
+
+            simple_ycb_experiments[mod_exp_name] = mod_cfg
+
+        # Add No Trans Baseline
+        mod_exp_name = exp_name + "_notrans"
+        mod_cfg = deepcopy(cfg)
+
+        mod_cfg["monty_config"]["motor_system_config"]["motor_system_args"][
+            "policy_args"
+        ]["use_goal_state_driven_actions"] = False
 
         simple_ycb_experiments[mod_exp_name] = mod_cfg
 
+        # Add no Trans alpha experiments
+        for k, v in alpha_values.items():
+            mod_exp_name = exp_name + "_" + "notrans" + "_" + k
+            mod_cfg = deepcopy(cfg)
 
-experiments = SimpleYcbExperiments(
-    simple_randrot_noise_10distinctobj_dist_agent=simple_ycb_experiments[
-        "simple_randrot_noise_10distinctobj_dist_agent"
-    ],
-    simple_base_config_10distinctobj_dist_agent=simple_ycb_experiments[
-        "simple_base_config_10distinctobj_dist_agent"
-    ],
-)
+            mod_cfg["monty_config"]["learning_module_configs"]["learning_module_0"][
+                "learning_module_args"
+            ]["present_weight"] = v
+            mod_cfg["monty_config"]["learning_module_configs"]["learning_module_0"][
+                "learning_module_args"
+            ]["past_weight"] = 1 - v
+
+            mod_cfg["monty_config"]["motor_system_config"]["motor_system_args"][
+                "policy_args"
+            ]["use_goal_state_driven_actions"] = False
+
+            simple_ycb_experiments[mod_exp_name] = mod_cfg
 
 
-CONFIGS = asdict(experiments)
+CONFIGS = asdict(SimpleYcbExperiments(**simple_ycb_experiments))
