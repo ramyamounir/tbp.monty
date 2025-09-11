@@ -84,33 +84,42 @@ class SimpleYcbExperiments:
     randrot_noise_10distinctobj_dist_agent_alpha1: dict
     randrot_noise_10distinctobj_dist_agent_alpha2: dict
     randrot_noise_10distinctobj_dist_agent_alpha3: dict
-    base_config_10distinctobj_dist_agent_alpha1: dict
-    base_config_10distinctobj_dist_agent_alpha2: dict
-    base_config_10distinctobj_dist_agent_alpha3: dict
-    randrot_noise_10distinctobj_surf_agent_alpha1: dict
-    randrot_noise_10distinctobj_surf_agent_alpha2: dict
-    randrot_noise_10distinctobj_surf_agent_alpha3: dict
-    base_config_10distinctobj_surf_agent_alpha1: dict
-    base_config_10distinctobj_surf_agent_alpha2: dict
-    base_config_10distinctobj_surf_agent_alpha3: dict
-
     randrot_noise_10distinctobj_dist_agent_notrans: dict
-    base_config_10distinctobj_dist_agent_notrans: dict
-    randrot_noise_10distinctobj_surf_agent_notrans: dict
-    base_config_10distinctobj_surf_agent_notrans: dict
-
     randrot_noise_10distinctobj_dist_agent_notrans_alpha1: dict
     randrot_noise_10distinctobj_dist_agent_notrans_alpha2: dict
     randrot_noise_10distinctobj_dist_agent_notrans_alpha3: dict
+
+    base_config_10distinctobj_dist_agent_alpha1: dict
+    base_config_10distinctobj_dist_agent_alpha2: dict
+    base_config_10distinctobj_dist_agent_alpha3: dict
+    base_config_10distinctobj_dist_agent_notrans: dict
     base_config_10distinctobj_dist_agent_notrans_alpha1: dict
     base_config_10distinctobj_dist_agent_notrans_alpha2: dict
     base_config_10distinctobj_dist_agent_notrans_alpha3: dict
+
+    randrot_noise_10distinctobj_surf_agent_alpha1: dict
+    randrot_noise_10distinctobj_surf_agent_alpha2: dict
+    randrot_noise_10distinctobj_surf_agent_alpha3: dict
+    randrot_noise_10distinctobj_surf_agent_notrans: dict
     randrot_noise_10distinctobj_surf_agent_notrans_alpha1: dict
     randrot_noise_10distinctobj_surf_agent_notrans_alpha2: dict
     randrot_noise_10distinctobj_surf_agent_notrans_alpha3: dict
+
+    base_config_10distinctobj_surf_agent_alpha1: dict
+    base_config_10distinctobj_surf_agent_alpha2: dict
+    base_config_10distinctobj_surf_agent_alpha3: dict
+    base_config_10distinctobj_surf_agent_notrans: dict
     base_config_10distinctobj_surf_agent_notrans_alpha1: dict
     base_config_10distinctobj_surf_agent_notrans_alpha2: dict
     base_config_10distinctobj_surf_agent_notrans_alpha3: dict
+
+    randrot_noise_77obj_surf_agent_alpha1: dict
+    randrot_noise_77obj_surf_agent_alpha2: dict
+    randrot_noise_77obj_surf_agent_alpha3: dict
+    randrot_noise_77obj_surf_agent_notrans: dict
+    randrot_noise_77obj_surf_agent_notrans_alpha1: dict
+    randrot_noise_77obj_surf_agent_notrans_alpha2: dict
+    randrot_noise_77obj_surf_agent_notrans_alpha3: dict
 
 
 @dataclass

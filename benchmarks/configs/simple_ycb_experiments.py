@@ -23,6 +23,7 @@ for exp_name, cfg in asdict(experiments).items():
         "randrot_noise_10distinctobj_dist_agent",
         "base_config_10distinctobj_surf_agent",
         "randrot_noise_10distinctobj_surf_agent",
+        "randrot_noise_77obj_surf_agent",
     ]:
         # Add Alpha Experiments
         for k, v in alpha_values.items():
