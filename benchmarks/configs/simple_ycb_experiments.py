@@ -39,6 +39,19 @@ for exp_name, cfg in asdict(experiments).items():
 
             simple_ycb_experiments[mod_exp_name] = mod_cfg
 
+            if exp_name == "randrot_noise_77obj_surf_agent" and k in [
+                "alpha1",
+                "alpha2",
+            ]:
+                mod_exp_name = mod_exp_name + "_" + "10x"
+                mod_cfg = deepcopy(mod_cfg)
+
+                mod_cfg["monty_config"]["learning_module_configs"]["learning_module_0"][
+                    "learning_module_args"
+                ]["x_percent_threshold"] = 10
+
+                simple_ycb_experiments[mod_exp_name] = mod_cfg
+
         # Add No Trans Baseline
         mod_exp_name = exp_name + "_notrans"
         mod_cfg = deepcopy(cfg)

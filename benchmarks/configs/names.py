@@ -114,7 +114,9 @@ class SimpleYcbExperiments:
     base_config_10distinctobj_surf_agent_notrans_alpha3: dict
 
     randrot_noise_77obj_surf_agent_alpha1: dict
+    randrot_noise_77obj_surf_agent_alpha1_10x: dict
     randrot_noise_77obj_surf_agent_alpha2: dict
+    randrot_noise_77obj_surf_agent_alpha2_10x: dict
     randrot_noise_77obj_surf_agent_alpha3: dict
     randrot_noise_77obj_surf_agent_notrans: dict
     randrot_noise_77obj_surf_agent_notrans_alpha1: dict
