@@ -10,6 +10,12 @@ import copy
 import os
 from dataclasses import asdict
 
+from tbp.monty.frameworks.config_utils.make_env_interface_configs import (
+    EnvironmentInterfacePerObjectArgs,
+    EvalExperimentArgs,
+    PredefinedObjectInitializer,
+)
+
 from benchmarks.configs.defaults import pretrained_dir
 from benchmarks.configs.names import UnsupervisedInferenceExperiments
 from benchmarks.configs.ycb_experiments import (
@@ -19,11 +25,6 @@ from benchmarks.configs.ycb_experiments import (
 from tbp.monty.frameworks.config_utils.config_args import (
     DetailedEvidenceLMLoggingConfig,
     get_cube_face_and_corner_views_rotations,
-)
-from tbp.monty.frameworks.config_utils.make_dataset_configs import (
-    EnvironmentDataloaderPerObjectArgs,
-    EvalExperimentArgs,
-    PredefinedObjectInitializer,
 )
 from tbp.monty.frameworks.loggers.monty_handlers import (
     BasicCSVStatsHandler,
@@ -148,7 +149,6 @@ APPLY_RAPID_CONFIGS = True
 NUM_ROTATIONS = 1
 
 # Changes the types of YCB objects evaluated
-# OBJECTS_LIST = ["strawberry", "banana"]
 OBJECTS_LIST = ["strawberry", "banana", "mug", "potted_meat_can", "mustard_bottle"]
 
 # Use False during debugging (with breakpoints) of evidence updates
@@ -218,7 +218,7 @@ if APPLY_RAPID_CONFIGS:
                 wandb_handlers=[],
             ),
             monty_config=surf_monty_config,
-            eval_dataloader_args=EnvironmentDataloaderPerObjectArgs(
+            eval_env_interface_args=EnvironmentInterfacePerObjectArgs(
                 object_names=OBJECTS_LIST,
                 object_init_sampler=PredefinedObjectInitializer(
                     rotations=test_rotations
@@ -239,7 +239,7 @@ if APPLY_RAPID_CONFIGS:
                 wandb_handlers=[],
             ),
             monty_config=dist_monty_config,
-            eval_dataloader_args=EnvironmentDataloaderPerObjectArgs(
+            eval_env_interface_args=EnvironmentInterfacePerObjectArgs(
                 object_names=OBJECTS_LIST,
                 object_init_sampler=PredefinedObjectInitializer(
                     rotations=test_rotations
