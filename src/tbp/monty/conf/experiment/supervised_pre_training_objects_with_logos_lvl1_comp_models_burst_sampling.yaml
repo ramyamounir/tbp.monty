@@ -8,11 +8,21 @@ defaults:
   - config/monty/learning_modules/two_stacked_constrained_lms_with_burst_sampling@config.monty_config.learning_module_configs
   - config/monty/motor_system/clear_motor_system_config@config.monty_config
   - config/monty/motor_system/informed_goal_state_driven@config.monty_config.motor_system_config
+  - config/logging/detailed_evidence_lm@config.logging
 
 config:
+  n_train_epochs: 1
+  train_env_interface_args:
+    object_names:
+      - "007_disk_tbp_horz"
   logging:
     run_name: supervised_pre_training_objects_with_logos_lvl1_comp_models_burst_sampling
   monty_config:
+    learning_module_configs:
+      learning_module_0:
+        learning_module_class: ${monty.class:tbp.monty.frameworks.models.detailed_logging_lm.EvidenceGraphLMWithDetailedLogging}
+      learning_module_1:
+        learning_module_class: ${monty.class:tbp.monty.frameworks.models.detailed_logging_lm.EvidenceGraphLMWithDetailedLogging}
     monty_args:
       num_exploratory_steps: 0
       min_train_steps: 500

@@ -7,6 +7,7 @@ learning_module_0:
     hypotheses_updater_args:
       deletion_trigger_slope: 0.0
       burst_trigger_slope: 0.7
+      include_telemetry: true
     evidence_threshold_config: all
     object_evidence_threshold: 10
     gsg:
