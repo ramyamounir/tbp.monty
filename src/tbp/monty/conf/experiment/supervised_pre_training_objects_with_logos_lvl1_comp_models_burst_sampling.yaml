@@ -15,6 +15,9 @@ config:
   train_env_interface_args:
     object_names:
       - "007_disk_tbp_horz"
+    object_init_sampler:
+      rotations:
+        - [0, 0, 0]
   logging:
     run_name: supervised_pre_training_objects_with_logos_lvl1_comp_models_burst_sampling
   monty_config:
