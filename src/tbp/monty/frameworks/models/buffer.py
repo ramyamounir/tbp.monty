@@ -128,9 +128,9 @@ class FeatureAtLocationBuffer:
             self._add_attr_to_feature_buffer(input_channel, "on_object", on_obj)
             if on_obj:
                 any_obs_on_obj = True
-        self.on_object.append(any_obs_on_obj)  # TODO S: remove?
-
         self._store_global_displacement_and_location(list_of_data)
+
+        self.on_object.append(any_obs_on_obj)  # TODO S: remove?
 
     def append_input_states(self, input_state):
         self.input_states.append(input_state)
@@ -522,37 +522,21 @@ class FeatureAtLocationBuffer:
         self.locations[input_channel][-1] = location
 
     def _store_global_displacement_and_location(self, list_of_data):
-        """Validate and store a single global displacement and location.
+        """Store the global displacement and location from the current step.
 
-        All input channels to a learning module are colocated (share the same
-        physical sensor position), so their displacements and locations must be
-        equal. This method asserts that invariant and stores one copy.
+        Computes the average location across all input channels and stores
+        any displacement present on the first observation.
 
         Args:
             list_of_data: List of State objects from the current step.
-
-        Raises:
-            ValueError: If channels report different locations or displacements.
         """
-        locations = np.array([s.location for s in list_of_data])
-        if not np.allclose(locations, locations[0], atol=1e-6):
-            raise ValueError(
-                f"All input channels must share the same location. Got: {locations}"
-            )
+        avg_location = np.mean([s.location for s in list_of_data], axis=0)
 
         if getattr(list_of_data[0], "displacement", None):
-            displacements = [s.displacement["displacement"] for s in list_of_data]
-            if not all(
-                np.allclose(d, displacements[0], atol=1e-6) for d in displacements
-            ):
-                raise ValueError(
-                    "All input channels must share the same displacement. "
-                    f"Got: {displacements}"
-                )
             for attr in list_of_data[0].displacement:
                 self._add_global_displacement(attr, list_of_data[0].displacement[attr])
 
-        self.global_location = locations[0].copy()
+        self.global_location = avg_location.copy()
 
     def _add_global_displacement(self, disp_name, disp_val):
         """Add a displacement value to the global displacement buffer.

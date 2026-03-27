@@ -771,7 +771,7 @@ class EvidenceGraphLM(GraphLM):
     def _update_evidence(
         self,
         features: dict,
-        displacements: dict | None,
+        displacement: npt.NDArray[np.float64] | None,
         graph_id: str,
     ) -> None:
         """Update evidence based on sensor displacement and sensed features.
@@ -784,7 +784,7 @@ class EvidenceGraphLM(GraphLM):
 
         Args:
             features: input features
-            displacements: given displacements
+            displacement: given displacement vector
             graph_id: identifier of the graph being updated
         """
         start_time = time.time()
@@ -815,7 +815,7 @@ class EvidenceGraphLM(GraphLM):
                     possible=self.possible_hyps[graph_id],
                 ),
                 features=features,
-                displacements=displacements,
+                displacement=displacement,
                 graph_id=graph_id,
                 mapper=self.channel_hypothesis_mapping[graph_id],
                 evidence_update_threshold=update_threshold,

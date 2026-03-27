@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, ContextManager, Dict, Literal, Optional, Protocol
 
 import numpy as np
+import numpy.typing as npt
 from scipy.spatial.transform import Rotation
 from typing_extensions import Self
 
@@ -64,7 +65,7 @@ class HypothesesUpdater(ContextManager[Self], Protocol):
         self,
         hypotheses: Hypotheses,
         features: dict,
-        displacements: dict | None,
+        displacement: npt.NDArray[np.float64] | None,
         graph_id: str,
         mapper: ChannelMapper,
         evidence_update_threshold: float,
@@ -74,7 +75,7 @@ class HypothesesUpdater(ContextManager[Self], Protocol):
         Args:
             hypotheses: Hypotheses for all input channels in the graph
             features: Input features
-            displacements: Given displacements
+            displacement: Given displacement vector
             graph_id: ID of the graph being updated
             mapper: Mapper for the graph_id to extract data from
                 evidence, locations, and poses based on the input channel
@@ -205,7 +206,7 @@ class DefaultHypothesesUpdater(HypothesesUpdater):
         self,
         hypotheses: Hypotheses,
         features: dict,
-        displacements: dict | None,
+        displacement: npt.NDArray[np.float64] | None,
         graph_id: str,
         mapper: ChannelMapper,
         evidence_update_threshold: float,
@@ -221,7 +222,7 @@ class DefaultHypothesesUpdater(HypothesesUpdater):
         Args:
             hypotheses: Hypotheses for all input channels in the graph
             features: Input features
-            displacements: Given displacements
+            displacement: Given displacement vector
             graph_id: Identifier of the graph being updated
             mapper: Mapper for the graph_id to extract data from
                 evidence, locations, and poses based on the input channel
@@ -276,7 +277,7 @@ class DefaultHypothesesUpdater(HypothesesUpdater):
                 # sensory input.
                 channel_possible_hypotheses, channel_hypothesis_displacer_telemetry = (
                     self.hypotheses_displacer.displace_hypotheses_and_compute_evidence(
-                        channel_displacement=displacements[input_channel],
+                        channel_displacement=displacement,
                         channel_features=features[input_channel],
                         evidence_update_threshold=evidence_update_threshold,
                         graph_id=graph_id,
