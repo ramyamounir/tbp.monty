@@ -111,7 +111,7 @@ class BurstSamplingHypothesesUpdaterTest(TestCase):
         channel_hyps, _ = self.updater.update_hypotheses(
             hypotheses=hypotheses,
             features={"patch": {"pose_fully_defined": True}},
-            displacements={"patch": None},
+            displacement=None,
             graph_id="object1",
             mapper=mapper,
             evidence_update_threshold=0,
@@ -432,7 +432,7 @@ class BurstSamplingHypothesesUpdaterTest(TestCase):
             self.updater.update_hypotheses(
                 hypotheses=hypotheses,
                 features={"patch": {"pose_fully_defined": True}},
-                displacements={"patch": None},
+                displacement=None,
                 graph_id="new_object",
                 mapper=mapper,
                 evidence_update_threshold=0,
