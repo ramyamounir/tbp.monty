@@ -167,7 +167,7 @@ class FeatureAtLocationBufferPaddingTest(unittest.TestCase):
         state_lm_1 = create_mock_state(
             sender_id="LM_0",
             sender_type="LM",
-            location=np.array([1.1, 2.1, 3.1]),
+            location=np.array([1.0, 2.0, 3.0]),
             on_object=True,
         )
         self.buffer.append([state_sm_1, state_lm_1])
@@ -199,6 +199,90 @@ class FeatureAtLocationBufferPaddingTest(unittest.TestCase):
                 f"Channel {channel}: locations has {loc_rows} rows but "
                 f"features has {feat_rows} rows",
             )
+
+
+class ColocationValidationTest(unittest.TestCase):
+    """Tests that buffer enforces colocation, all channels must share location."""
+
+    def setUp(self):
+        self.buffer = FeatureAtLocationBuffer()
+
+    def test_raises_on_different_locations(self):
+        state_a = create_mock_state(
+            sender_id="SM_0",
+            sender_type="SM",
+            location=np.array([1.0, 2.0, 3.0]),
+            on_object=True,
+        )
+        state_b = create_mock_state(
+            sender_id="LM_0",
+            sender_type="LM",
+            location=np.array([9.0, 9.0, 9.0]),
+            on_object=True,
+        )
+        with self.assertRaises(ValueError, msg="same location"):
+            self.buffer.append([state_a, state_b])
+
+    def test_raises_on_different_displacements(self):
+        state_a = create_mock_state(
+            sender_id="SM_0",
+            sender_type="SM",
+            location=np.array([1.0, 2.0, 3.0]),
+            on_object=True,
+        )
+        state_a.displacement = {"displacement": np.array([0.1, 0.2, 0.3])}
+
+        state_b = create_mock_state(
+            sender_id="LM_0",
+            sender_type="LM",
+            location=np.array([1.0, 2.0, 3.0]),
+            on_object=True,
+        )
+        state_b.displacement = {"displacement": np.array([9.0, 9.0, 9.0])}
+
+        with self.assertRaises(ValueError, msg="same displacement"):
+            self.buffer.append([state_a, state_b])
+
+    def test_accepts_equal_locations(self):
+        state_a = create_mock_state(
+            sender_id="SM_0",
+            sender_type="SM",
+            location=np.array([1.0, 2.0, 3.0]),
+            on_object=True,
+        )
+        state_b = create_mock_state(
+            sender_id="LM_0",
+            sender_type="LM",
+            location=np.array([1.0, 2.0, 3.0]),
+            on_object=True,
+        )
+        self.buffer.append([state_a, state_b])
+        np.testing.assert_array_equal(
+            self.buffer.global_location, np.array([1.0, 2.0, 3.0])
+        )
+
+    def test_accepts_equal_displacements(self):
+        disp = np.array([0.1, 0.2, 0.3])
+        state_a = create_mock_state(
+            sender_id="SM_0",
+            sender_type="SM",
+            location=np.array([1.0, 2.0, 3.0]),
+            on_object=True,
+        )
+        state_a.displacement = {"displacement": disp.copy()}
+
+        state_b = create_mock_state(
+            sender_id="LM_0",
+            sender_type="LM",
+            location=np.array([1.0, 2.0, 3.0]),
+            on_object=True,
+        )
+        state_b.displacement = {"displacement": disp.copy()}
+
+        self.buffer.append([state_a, state_b])
+        np.testing.assert_array_almost_equal(
+            self.buffer.get_current_displacement(), disp
+        )
 
 
 class PadToTargetLengthTest(unittest.TestCase):
