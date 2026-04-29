@@ -363,7 +363,9 @@ class MontyBase(Monty):
                     )
 
     def _post_step(self):
-        pass
+        from tbp.monty.frameworks.loggers import hypothesis_evidence_logger
+
+        hypothesis_evidence_logger.set_step(self.matching_steps)
 
     ###
     # Methods (other than step) that interact with the experiment

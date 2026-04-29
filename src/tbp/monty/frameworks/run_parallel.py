@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -626,6 +627,13 @@ def run_episodes_parallel(
             id=hydra.utils.instantiate(experiments[0]["config"]["logging"]["wandb_id"]),
         )
     print(f"Wandb setup took {time.time() - start_time} seconds")
+    os.environ.setdefault(
+        "HYPOTHESIS_EVIDENCE_LOG_DIR",
+        str(
+            Path("~/tbp/tbp.monty/pe").expanduser()
+            / datetime.now().strftime("%Y%m%d_%H%M%S")
+        ),
+    )
     start_time = time.time()
     with mp.Pool(num_parallel, maxtasksperchild=1) as p:
         if train:

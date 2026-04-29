@@ -16,6 +16,7 @@ from typing import Protocol
 import numpy as np
 import numpy.typing as npt
 
+from tbp.monty.frameworks.loggers import hypothesis_evidence_logger
 from tbp.monty.frameworks.models.evidence_matching.channels import (
     all_usable_input_channels,
 )
@@ -186,6 +187,12 @@ class DefaultHypothesesDisplacer:
             # Prediction error from summed evidence
             mlh_index = np.argmax(possible_hypotheses.evidence)
             evidence_for_mlh = total_evidence_to_add[mlh_index]
+
+            hypothesis_evidence_logger.log(
+                graph_id=graph_id,
+                mlh_index=mlh_index,
+                evidence=total_evidence_to_add,
+            )
 
             # Each channel contributes evidence in range [MIN_EVIDENCE, MAX_EVIDENCE].
             # With C channels the summed range is [MIN_EVIDENCE * C, MAX_EVIDENCE * C].

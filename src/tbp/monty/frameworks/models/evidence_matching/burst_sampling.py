@@ -17,6 +17,7 @@ import numpy.typing as npt
 from scipy.spatial.transform import Rotation
 from typing_extensions import Self
 
+from tbp.monty.frameworks.loggers import hypothesis_evidence_logger
 from tbp.monty.frameworks.models.evidence_matching.channels import (
     all_usable_input_channels,
 )
@@ -341,6 +342,10 @@ class BurstSamplingHypothesesUpdater:
             graph_id=graph_id,
             samples_per_channel=informed_samples_per_channel,
             tracker=tracker,
+        )
+
+        hypothesis_evidence_logger.set_is_sampling(
+            len(informed_hypotheses.evidence) > 0
         )
 
         # We only displace existing hypotheses since the newly sampled hypotheses

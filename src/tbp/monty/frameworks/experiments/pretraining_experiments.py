@@ -24,6 +24,7 @@ from tbp.monty.frameworks.experiments.mode import ExperimentMode
 from tbp.monty.frameworks.experiments.monty_experiment import (
     MontyExperiment,
 )
+from tbp.monty.frameworks.loggers import hypothesis_evidence_logger
 
 __all__ = ["MontySupervisedObjectPretrainingExperiment"]
 
@@ -179,6 +180,15 @@ class MontySupervisedObjectPretrainingExperiment(MontyExperiment):
                 f"running eval epoch {self.eval_epochs} "
                 f"eval episode {self.eval_episodes}"
             )
+
+        hypothesis_evidence_logger.set_episode(
+            self.train_episodes
+            if self.experiment_mode is ExperimentMode.TRAIN
+            else self.eval_episodes
+        )
+        hypothesis_evidence_logger.set_primary_target_graph_id(
+            self.env_interface.primary_target["object"]
+        )
 
         self.reset_episode_rng()
 

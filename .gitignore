@@ -147,3 +147,4 @@ outputs/
 
 # MuJoCo
 MUJOCO_LOG.TXT
+pe/
