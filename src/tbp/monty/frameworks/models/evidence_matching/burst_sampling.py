@@ -344,9 +344,7 @@ class BurstSamplingHypothesesUpdater:
             tracker=tracker,
         )
 
-        hypothesis_evidence_logger.set_is_sampling(
-            len(informed_hypotheses.evidence) > 0
-        )
+        hypothesis_evidence_logger.set_is_sampling(len(new_hypotheses.evidence) > 0)
 
         # We only displace existing hypotheses since the newly sampled hypotheses
         # should not be affected by the displacement from the last sensory input.
