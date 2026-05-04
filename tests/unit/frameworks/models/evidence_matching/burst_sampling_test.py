@@ -108,6 +108,8 @@ class BurstSamplingHypothesesUpdaterTest(TestCase):
                 mask_to_retain=np.array([False, True, True, False, False])
             )
         )
+        tracker1.calculate_slopes = Mock(return_value=np.zeros(0))
+        tracker1.hyp_ages = Mock(return_value=np.zeros(0, dtype=int))
         self.updater.evidence_slope_trackers = {"object1": tracker1}
 
         result, _ = self.updater.update_hypotheses(

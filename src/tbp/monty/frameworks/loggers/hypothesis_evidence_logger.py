@@ -1,10 +1,19 @@
+# Copyright 2025-2026 Thousand Brains Project
+#
+# Copyright may exist in Contributors' modifications
+# and/or contributions to the work.
+#
+# Use of this source code is governed by the MIT
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 from __future__ import annotations
 
 import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import IO
+from typing import IO, Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -12,9 +21,10 @@ import numpy.typing as npt
 _BASE_DIR = Path("~/tbp/tbp.monty/pe").expanduser()
 _FILENAME = "hypothesis_evidence.jsonl"
 
-_episode: int = -1
-_step: int = -1
-_is_sampling: bool = False
+LOG_MODE: Literal["displacer", "tracker"] = "displacer"
+
+_episode: int = 0
+_step: int = 0
 _primary_target_graph_id: str = ""
 _file: IO[str] | None = None
 
@@ -27,11 +37,6 @@ def set_episode(episode: int) -> None:
 def set_step(step: int) -> None:
     global _step  # noqa: PLW0603
     _step = int(step)
-
-
-def set_is_sampling(value: bool) -> None:
-    global _is_sampling  # noqa: PLW0603
-    _is_sampling = bool(value)
 
 
 def set_primary_target_graph_id(graph_id: str) -> None:
@@ -60,8 +65,12 @@ def log(
     graph_id: str,
     mlh_index: int,
     evidence: npt.NDArray[np.float64],
+    pose_evidence_mlh: float,
+    feature_evidence_mlh: float,
+    is_sampling: bool,
 ) -> None:
-    global _is_sampling  # noqa: PLW0603
+    if LOG_MODE != "displacer":
+        return
     f = _ensure_file_open()
     f.write(
         json.dumps(
@@ -71,10 +80,36 @@ def log(
                 "graph_id": graph_id,
                 "mlh_index": int(mlh_index),
                 "evidence": evidence.tolist(),
-                "is_sampling": _is_sampling,
+                "pose_evidence_mlh": float(pose_evidence_mlh),
+                "feature_evidence_mlh": float(feature_evidence_mlh),
+                "is_sampling": bool(is_sampling),
                 "primary_target_graph_id": _primary_target_graph_id,
             }
         )
         + "\n"
     )
-    _is_sampling = False
+
+
+def log_tracker(
+    graph_id: str,
+    slopes: npt.NDArray[np.float64],
+    ages: npt.NDArray[np.int_],
+    is_sampling: bool,
+) -> None:
+    if LOG_MODE != "tracker":
+        return
+    f = _ensure_file_open()
+    f.write(
+        json.dumps(
+            {
+                "episode": _episode,
+                "step": _step,
+                "graph_id": graph_id,
+                "slopes": slopes.tolist(),
+                "ages": ages.tolist(),
+                "is_sampling": bool(is_sampling),
+                "primary_target_graph_id": _primary_target_graph_id,
+            }
+        )
+        + "\n"
+    )

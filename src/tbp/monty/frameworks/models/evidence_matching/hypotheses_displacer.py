@@ -57,6 +57,7 @@ class HypothesesDisplacer(Protocol):
         evidence_update_threshold: float,
         graph_id: str,
         possible_hypotheses: Hypotheses,
+        is_sampling: bool,
     ) -> tuple[Hypotheses, HypothesisDisplacerTelemetry]:
         """Updates evidence by comparing features after applying sensed displacement.
 
@@ -70,6 +71,8 @@ class HypothesesDisplacer(Protocol):
             evidence_update_threshold: Evidence update threshold.
             graph_id: The ID of the current graph.
             possible_hypotheses: hypotheses to be modified.
+            is_sampling: Whether new hypotheses were sampled this step for this
+                graph_id (used only for logging).
 
         Returns:
             Displaced hypotheses with computed evidence and telemetry.
@@ -146,6 +149,7 @@ class DefaultHypothesesDisplacer:
         evidence_update_threshold: float,
         graph_id: str,
         possible_hypotheses: Hypotheses,
+        is_sampling: bool,
     ) -> tuple[Hypotheses, HypothesisDisplacerTelemetry]:
         # Have to do this for all hypotheses so we don't lose the path information
         rotated_displacements = possible_hypotheses.poses.dot(displacement)
@@ -168,14 +172,17 @@ class DefaultHypothesesDisplacer:
                 features, self.graph_memory.get_input_channels_in_graph(graph_id)
             )
             total_evidence_to_add = np.zeros_like(possible_hypotheses.evidence)
+            pose_to_add = np.zeros_like(possible_hypotheses.evidence)
+            feature_to_add = np.zeros_like(possible_hypotheses.evidence)
             for channel in input_channels:
-                new_evidence = self._calculate_evidence_for_new_locations(
+                new_pose, new_feature = self._calculate_evidence_for_new_locations(
                     graph_id=graph_id,
                     input_channel=channel,
                     search_locations=search_locations[hyp_idxs_to_test],
                     channel_possible_poses=possible_hypotheses.poses[hyp_idxs_to_test],
                     channel_features=features[channel],
                 )
+                new_evidence = new_pose + new_feature
                 min_update = np.clip(np.min(new_evidence), 0, np.inf)
 
                 channel_evidence = (
@@ -183,6 +190,8 @@ class DefaultHypothesesDisplacer:
                 )
                 channel_evidence[hyp_idxs_to_test] = new_evidence
                 total_evidence_to_add += channel_evidence
+                pose_to_add[hyp_idxs_to_test] += new_pose
+                feature_to_add[hyp_idxs_to_test] += new_feature
 
             # Prediction error from summed evidence
             mlh_index = np.argmax(possible_hypotheses.evidence)
@@ -192,6 +201,9 @@ class DefaultHypothesesDisplacer:
                 graph_id=graph_id,
                 mlh_index=mlh_index,
                 evidence=total_evidence_to_add,
+                pose_evidence_mlh=float(pose_to_add[mlh_index]),
+                feature_evidence_mlh=float(feature_to_add[mlh_index]),
+                is_sampling=is_sampling,
             )
 
             # Each channel contributes evidence in range [MIN_EVIDENCE, MAX_EVIDENCE].
@@ -232,7 +244,7 @@ class DefaultHypothesesDisplacer:
         search_locations: np.ndarray,
         channel_possible_poses: np.ndarray,
         channel_features: dict,
-    ):
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """Use search locations, sensed features and graph model to calculate evidence.
 
         First, the search locations are used to find the nearest nodes in the graph
@@ -246,7 +258,8 @@ class DefaultHypothesesDisplacer:
         in the graph and take the average over the evidence from all input channels.
 
         Returns:
-            The location evidence.
+            Per-hypothesis (pose_evidence, feature_evidence) at the same winning
+            neighbor. Their sum equals the legacy combined evidence.
         """
         logger.debug(
             f"Calculating evidence for {graph_id} using input from {input_channel}"
@@ -291,14 +304,14 @@ class DefaultHypothesesDisplacer:
         )
         # Calculate the pose error for each hypothesis
         # shape=(H, K)
-        radius_evidence = self._get_pose_evidence_matrix(
+        pose_matrix = self._get_pose_evidence_matrix(
             pose_transformed_features,
             new_pos_features,
             input_channel,
             node_distance_weights,
         )
         # Set the evidences which are too far away to -1
-        radius_evidence[mask] = -1
+        pose_matrix[mask] = -1
         # If a node is too far away, weight the negative evidence fully (*1). This
         # only comes into play if there are no nearby nodes in the radius, then we
         # want an evidence of -1 for this hypothesis.
@@ -322,17 +335,15 @@ class DefaultHypothesesDisplacer:
                 channel_tolerances=self.tolerances[input_channel],
                 input_channel=input_channel,
             )
-            hypothesis_radius_feature_evidence = node_feature_evidence[nearest_node_ids]
+            feature_matrix = node_feature_evidence[nearest_node_ids]
             # Set feature evidence of nearest neighbors that are too far away to 0
-            hypothesis_radius_feature_evidence[mask] = 0
-            # Take the maximum feature evidence out of the nearest neighbors in the
-            # search radius and weighted by its distance to the search location.
+            feature_matrix[mask] = 0
             # Evidence will be in [0, 1] and is only 1 if all features match
             # perfectly and the node is at the search location.
-            radius_evidence = (
-                radius_evidence
-                + hypothesis_radius_feature_evidence * self.feature_evidence_increment
-            )
+            feature_matrix = feature_matrix * self.feature_evidence_increment
+        else:
+            feature_matrix = np.zeros_like(pose_matrix)
+
         # We take the maximum to be better able to deal with parts of the model where
         # features change quickly and we may have noisy location information. This way
         # we check if we can find a good match of pose features within the search
@@ -340,11 +351,16 @@ class DefaultHypothesesDisplacer:
         # that are not a good match.
         # Removing the comment weights the evidence by the nodes distance from the
         # search location. However, empirically this did not seem to help.
+        combined = pose_matrix + feature_matrix
+        best_k = np.argmax(combined, axis=1)
         # shape=(H,)
-        return np.max(
-            radius_evidence,  # * node_distance_weights,
-            axis=1,
-        )
+        pose_per_hyp = np.take_along_axis(
+            pose_matrix, best_k[:, None], axis=1
+        ).squeeze(1)
+        feature_per_hyp = np.take_along_axis(
+            feature_matrix, best_k[:, None], axis=1
+        ).squeeze(1)
+        return pose_per_hyp, feature_per_hyp
 
     def _get_node_distance_weights(self, distances):
         return (self.max_match_distance - distances) / self.max_match_distance

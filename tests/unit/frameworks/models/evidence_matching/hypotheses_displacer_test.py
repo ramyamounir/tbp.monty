@@ -64,7 +64,10 @@ class DefaultHypothesesDisplacerTest(TestCase):
         with patch.object(
             self.displacer,
             "_calculate_evidence_for_new_locations",
-            side_effect=lambda **kw: evidence_by_channel[kw["input_channel"]],
+            side_effect=lambda **kw: (
+                evidence_by_channel[kw["input_channel"]],
+                np.zeros_like(evidence_by_channel[kw["input_channel"]]),
+            ),
         ):
             result, _telemetry = (
                 self.displacer.displace_hypotheses_and_compute_evidence(
@@ -76,6 +79,7 @@ class DefaultHypothesesDisplacerTest(TestCase):
                     evidence_update_threshold=-np.inf,
                     graph_id="test_object",
                     possible_hypotheses=hypotheses,
+                    is_sampling=False,
                 )
             )
 
@@ -101,7 +105,10 @@ class DefaultHypothesesDisplacerTest(TestCase):
         with patch.object(
             self.displacer,
             "_calculate_evidence_for_new_locations",
-            side_effect=lambda **kw: evidence_by_channel[kw["input_channel"]],
+            side_effect=lambda **kw: (
+                evidence_by_channel[kw["input_channel"]],
+                np.zeros_like(evidence_by_channel[kw["input_channel"]]),
+            ),
         ):
             _, telemetry = self.displacer.displace_hypotheses_and_compute_evidence(
                 displacement=np.zeros(3),
@@ -112,9 +119,63 @@ class DefaultHypothesesDisplacerTest(TestCase):
                 evidence_update_threshold=-np.inf,
                 graph_id="test_object",
                 possible_hypotheses=hypotheses,
+                is_sampling=False,
             )
 
         # MLH is index 0 (evidence 5.0), summed evidence at MLH = 1.5 + 0.5 = 2.0
         # With 2 channels (C=2), range is [-C, 2C] = [-2, 4], mapped to [0, 1]:
         # prediction_error = (-2.0 + 2*2) / (3*2) = 1/3
         self.assertAlmostEqual(telemetry.mlh_prediction_error, 1 / 3)
+
+    def test_pose_feature_split_logged_for_mlh(self) -> None:
+        num_hyps = 2
+        hypotheses = Hypotheses(
+            evidence=np.array([5.0, 1.0]),
+            locations=np.zeros((num_hyps, 3)),
+            poses=np.tile(np.eye(3), (num_hyps, 1, 1)),
+            possible=np.ones(num_hyps, dtype=bool),
+        )
+
+        pose_by_channel = {
+            "channel_a": np.array([0.7, 0.2]),
+            "channel_b": np.array([0.3, -0.4]),
+        }
+        feature_by_channel = {
+            "channel_a": np.array([0.4, 0.1]),
+            "channel_b": np.array([0.1, 0.05]),
+        }
+
+        with patch.object(
+            self.displacer,
+            "_calculate_evidence_for_new_locations",
+            side_effect=lambda **kw: (
+                pose_by_channel[kw["input_channel"]],
+                feature_by_channel[kw["input_channel"]],
+            ),
+        ), patch(
+            "tbp.monty.frameworks.models.evidence_matching."
+            "hypotheses_displacer.hypothesis_evidence_logger.log"
+        ) as mock_log:
+            self.displacer.displace_hypotheses_and_compute_evidence(
+                displacement=np.zeros(3),
+                features={
+                    "channel_a": {"pose_fully_defined": True},
+                    "channel_b": {"pose_fully_defined": True},
+                },
+                evidence_update_threshold=-np.inf,
+                graph_id="test_object",
+                possible_hypotheses=hypotheses,
+                is_sampling=False,
+            )
+
+        mock_log.assert_called_once()
+        kwargs = mock_log.call_args.kwargs
+        self.assertEqual(kwargs["mlh_index"], 0)
+        # MLH at index 0: pose = 0.7 + 0.3 = 1.0, feature = 0.4 + 0.1 = 0.5
+        self.assertAlmostEqual(kwargs["pose_evidence_mlh"], 1.0)
+        self.assertAlmostEqual(kwargs["feature_evidence_mlh"], 0.5)
+        # Sum equals total evidence_to_add at MLH (1.5)
+        self.assertAlmostEqual(
+            kwargs["pose_evidence_mlh"] + kwargs["feature_evidence_mlh"],
+            kwargs["evidence"][0],
+        )

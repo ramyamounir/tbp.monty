@@ -344,7 +344,7 @@ class BurstSamplingHypothesesUpdater:
             tracker=tracker,
         )
 
-        hypothesis_evidence_logger.set_is_sampling(len(new_hypotheses.evidence) > 0)
+        is_sampling = len(new_hypotheses.evidence) > 0
 
         # We only displace existing hypotheses since the newly sampled hypotheses
         # should not be affected by the displacement from the last sensory input.
@@ -356,6 +356,7 @@ class BurstSamplingHypothesesUpdater:
                     evidence_update_threshold=evidence_update_threshold,
                     graph_id=graph_id,
                     possible_hypotheses=existing_hypotheses,
+                    is_sampling=is_sampling,
                 )
             )
         else:
@@ -367,6 +368,13 @@ class BurstSamplingHypothesesUpdater:
             [existing_hypotheses, new_hypotheses]
         )
         tracker.update(hypotheses_update.evidence)
+
+        hypothesis_evidence_logger.log_tracker(
+            graph_id=graph_id,
+            slopes=tracker.calculate_slopes(),
+            ages=tracker.hyp_ages(),
+            is_sampling=is_sampling,
+        )
 
         if self.include_telemetry:
             telemetry = asdict(
