@@ -31,6 +31,7 @@ from tbp.monty.experiment.environment import (
 from tbp.monty.frameworks.actions.actions import Action
 from tbp.monty.frameworks.experiments.mode import ExperimentMode
 from tbp.monty.frameworks.experiments.seed import episode_seed
+from tbp.monty.frameworks.loggers import hypothesis_evidence_logger
 from tbp.monty.frameworks.loggers.exp_logger import (
     BaseMontyLogger,
     LoggingCallbackHandler,
@@ -125,6 +126,7 @@ class MontyExperiment:
             monty_config=config["monty_config"],
             model_path=self.model_path,
         )
+        hypothesis_evidence_logger.dump_graphs(self.model)
         self.load_environment_interfaces(config)
         self.init_monty_data_loggers(self.config["logging"])
         self.init_counters()

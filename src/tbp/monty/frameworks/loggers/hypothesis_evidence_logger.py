@@ -84,6 +84,39 @@ def _ensure_file_open() -> IO[str]:
     return _file
 
 
+def dump_graphs(model) -> None:
+    """Dump per-(lm_id, graph_id, channel) node positions to graph_nodes.npz.
+
+    Walks the Monty model's learning modules and writes every loaded graph's
+    node positions to a sibling `graph_nodes.npz` next to the JSONL log.
+    Keys are formatted `f"{lm_id}__{graph_id}__{channel}"`. Respects
+    `INCLUDE_LEARNING_MODULES`. Skips if the file already exists.
+
+    Call once at experiment setup (after graphs are loaded into LMs, before
+    any episodes run).
+    """
+    f = _ensure_file_open()
+    out_path = Path(f.name).parent / "graph_nodes.npz"
+    if out_path.exists():
+        return
+    arrays: dict[str, npt.NDArray[np.float64]] = {}
+    for lm in model.learning_modules:
+        lm_id = lm.learning_module_id
+        if INCLUDE_LEARNING_MODULES and lm_id not in INCLUDE_LEARNING_MODULES:
+            continue
+        graph_memory = lm.graph_memory
+        for graph_id in graph_memory.get_memory_ids():
+            for input_channel in graph_memory.get_input_channels_in_graph(graph_id):
+                locs = np.asarray(
+                    graph_memory.get_locations_in_graph(graph_id, input_channel),
+                    dtype=np.float64,
+                )
+                arrays[f"{lm_id}__{graph_id}__{input_channel}"] = locs
+    if not arrays:
+        return
+    np.savez_compressed(out_path, **arrays)
+
+
 def log(
     graph_id: str,
     mlh_index: int,
