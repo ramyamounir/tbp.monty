@@ -481,6 +481,22 @@ class GridObjectModel(GraphObjectModel):
 
         return nearest_node_ids
 
+    def query_within_radius(self, search_locations, radius):
+        """Find all graph nodes within Euclidean `radius` of each search location.
+
+        Returns:
+            A list of length `len(search_locations)`. Each element is a 1D
+            array of node indices whose Euclidean distance to the corresponding
+            search location is `<= radius`.
+        """
+        indices_per_loc = self._location_tree.query_ball_point(
+            search_locations,
+            r=radius,
+            p=2,
+            workers=1,
+        )
+        return [np.asarray(idxs, dtype=np.int_) for idxs in indices_per_loc]
+
     # ------------------ Getters & Setters ---------------------
     def set_graph(self, graph):
         """Set self._graph property and convert input graph to right format."""

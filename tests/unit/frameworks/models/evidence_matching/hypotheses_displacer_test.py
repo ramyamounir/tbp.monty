@@ -61,10 +61,16 @@ class DefaultHypothesesDisplacerTest(TestCase):
             "channel_a": np.array([0.5, 0.5, 0.5]),
             "channel_b": np.array([1.0, 0.0, -1.0]),
         }
+        n_in_radius = np.zeros(num_hyps, dtype=np.int_)
+        nearest_dist = np.zeros(num_hyps)
         with patch.object(
             self.displacer,
             "_calculate_evidence_for_new_locations",
-            side_effect=lambda **kw: evidence_by_channel[kw["input_channel"]],
+            side_effect=lambda **kw: (
+                evidence_by_channel[kw["input_channel"]],
+                n_in_radius,
+                nearest_dist,
+            ),
         ):
             result, _telemetry = (
                 self.displacer.displace_hypotheses_and_compute_evidence(
@@ -76,6 +82,7 @@ class DefaultHypothesesDisplacerTest(TestCase):
                     evidence_update_threshold=-np.inf,
                     graph_id="test_object",
                     possible_hypotheses=hypotheses,
+                    is_sampling=False,
                 )
             )
 
@@ -97,11 +104,17 @@ class DefaultHypothesesDisplacerTest(TestCase):
             "channel_a": np.array([1.5, 0.5]),
             "channel_b": np.array([0.5, -0.5]),
         }
+        n_in_radius = np.zeros(num_hyps, dtype=np.int_)
+        nearest_dist = np.zeros(num_hyps)
 
         with patch.object(
             self.displacer,
             "_calculate_evidence_for_new_locations",
-            side_effect=lambda **kw: evidence_by_channel[kw["input_channel"]],
+            side_effect=lambda **kw: (
+                evidence_by_channel[kw["input_channel"]],
+                n_in_radius,
+                nearest_dist,
+            ),
         ):
             _, telemetry = self.displacer.displace_hypotheses_and_compute_evidence(
                 displacement=np.zeros(3),
@@ -112,6 +125,7 @@ class DefaultHypothesesDisplacerTest(TestCase):
                 evidence_update_threshold=-np.inf,
                 graph_id="test_object",
                 possible_hypotheses=hypotheses,
+                is_sampling=False,
             )
 
         # MLH is index 0 (evidence 5.0), summed evidence at MLH = 1.5 + 0.5 = 2.0

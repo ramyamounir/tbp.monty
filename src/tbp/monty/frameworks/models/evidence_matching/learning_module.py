@@ -22,6 +22,7 @@ from scipy.spatial.transform import Rotation
 from tbp.monty.cmp import Message
 from tbp.monty.context import RuntimeContext
 from tbp.monty.frameworks.experiments.mode import ExperimentMode
+from tbp.monty.frameworks.loggers import hypothesis_evidence_logger
 from tbp.monty.frameworks.models.evidence_matching.graph_memory import (
     EvidenceGraphMemory,
 )
@@ -865,6 +866,7 @@ class EvidenceGraphLM(GraphLM):
             evidence_all_channels=self._hypotheses[graph_id].evidence,
         )
 
+        hypothesis_evidence_logger.set_learning_module_id(self.learning_module_id)
         hypotheses_update, hypotheses_update_telemetry = (
             self.hypotheses_updater.update_hypotheses(
                 hypotheses=self._hypotheses[graph_id],

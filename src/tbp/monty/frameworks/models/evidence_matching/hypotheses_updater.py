@@ -261,6 +261,7 @@ class DefaultHypothesesUpdater(HypothesesUpdater):
                 evidence_update_threshold=evidence_update_threshold,
                 graph_id=graph_id,
                 possible_hypotheses=hypotheses,
+                is_sampling=False,
             )
         )
 

@@ -16,6 +16,7 @@ from typing import Protocol
 import numpy as np
 import numpy.typing as npt
 
+from tbp.monty.frameworks.loggers import hypothesis_evidence_logger
 from tbp.monty.frameworks.models.evidence_matching.channels import (
     all_usable_input_channels,
 )
@@ -56,6 +57,7 @@ class HypothesesDisplacer(Protocol):
         evidence_update_threshold: float,
         graph_id: str,
         possible_hypotheses: Hypotheses,
+        is_sampling: bool,
     ) -> tuple[Hypotheses, HypothesisDisplacerTelemetry]:
         """Updates evidence by comparing features after applying sensed displacement.
 
@@ -69,6 +71,8 @@ class HypothesesDisplacer(Protocol):
             evidence_update_threshold: Evidence update threshold.
             graph_id: The ID of the current graph.
             possible_hypotheses: hypotheses to be modified.
+            is_sampling: Whether new hypotheses were sampled this step for this
+                graph_id (used only for logging).
 
         Returns:
             Displaced hypotheses with computed evidence and telemetry.
@@ -145,6 +149,7 @@ class DefaultHypothesesDisplacer:
         evidence_update_threshold: float,
         graph_id: str,
         possible_hypotheses: Hypotheses,
+        is_sampling: bool,
     ) -> tuple[Hypotheses, HypothesisDisplacerTelemetry]:
         # Have to do this for all hypotheses so we don't lose the path information
         rotated_displacements = possible_hypotheses.poses.dot(displacement)
@@ -167,13 +172,18 @@ class DefaultHypothesesDisplacer:
                 features, self.graph_memory.get_input_channels_in_graph(graph_id)
             )
             total_evidence_to_add = np.zeros_like(possible_hypotheses.evidence)
+            per_channel: dict[str, dict[str, np.ndarray]] = {}
             for channel in input_channels:
-                new_evidence = self._calculate_evidence_for_new_locations(
-                    graph_id=graph_id,
-                    input_channel=channel,
-                    search_locations=search_locations[hyp_idxs_to_test],
-                    channel_possible_poses=possible_hypotheses.poses[hyp_idxs_to_test],
-                    channel_features=features[channel],
+                new_evidence, n_nodes_in_radius, nearest_distance = (
+                    self._calculate_evidence_for_new_locations(
+                        graph_id=graph_id,
+                        input_channel=channel,
+                        search_locations=search_locations[hyp_idxs_to_test],
+                        channel_possible_poses=(
+                            possible_hypotheses.poses[hyp_idxs_to_test]
+                        ),
+                        channel_features=features[channel],
+                    )
                 )
                 min_update = np.clip(np.min(new_evidence), 0, np.inf)
 
@@ -182,10 +192,23 @@ class DefaultHypothesesDisplacer:
                 )
                 channel_evidence[hyp_idxs_to_test] = new_evidence
                 total_evidence_to_add += channel_evidence
+                per_channel[channel] = {
+                    "evidence": channel_evidence,
+                    "n_nodes_in_radius": n_nodes_in_radius,
+                    "nearest_distance": nearest_distance,
+                }
 
             # Prediction error from summed evidence
             mlh_index = np.argmax(possible_hypotheses.evidence)
             evidence_for_mlh = total_evidence_to_add[mlh_index]
+
+            hypothesis_evidence_logger.log(
+                graph_id=graph_id,
+                mlh_index=mlh_index,
+                hyp_idxs_tested=hyp_idxs_to_test,
+                per_channel=per_channel,
+                is_sampling=is_sampling,
+            )
 
             # Each channel contributes evidence in range [MIN_EVIDENCE, MAX_EVIDENCE].
             # With C channels the summed range is [MIN_EVIDENCE * C, MAX_EVIDENCE * C].
@@ -225,7 +248,11 @@ class DefaultHypothesesDisplacer:
         search_locations: np.ndarray,
         channel_possible_poses: np.ndarray,
         channel_features: dict,
-    ):
+    ) -> tuple[
+        npt.NDArray[np.float64],
+        npt.NDArray[np.int_],
+        npt.NDArray[np.float64],
+    ]:
         """Use search locations, sensed features and graph model to calculate evidence.
 
         First, the search locations are used to find the nearest nodes in the graph
@@ -239,7 +266,11 @@ class DefaultHypothesesDisplacer:
         in the graph and take the average over the evidence from all input channels.
 
         Returns:
-            The location evidence.
+            A 3-tuple per tested hypothesis:
+                - location evidence (max over the K nearest neighbors),
+                - count of all stored nodes whose custom distance to the search
+                  location is below `max_match_distance` (not capped at K),
+                - distance to the closest of the K nearest neighbors.
         """
         logger.debug(
             f"Calculating evidence for {graph_id} using input from {input_channel}"
@@ -275,6 +306,14 @@ class DefaultHypothesesDisplacer:
         )
         # Get IDs where custom_nearest_node_dists > max_match_distance
         mask = node_distance_weights <= 0
+        nearest_distance = custom_nearest_node_dists.min(axis=1)
+        n_nodes_in_radius = self._count_nodes_within_custom_radius(
+            graph_id=graph_id,
+            input_channel=input_channel,
+            search_locations=search_locations,
+            sensed_normals=pose_transformed_features["pose_vectors"][:, 0],
+            curvature=max_abs_curvature,
+        )
 
         new_pos_features = self.graph_memory.get_features_at_node(
             graph_id,
@@ -334,10 +373,56 @@ class DefaultHypothesesDisplacer:
         # Removing the comment weights the evidence by the nodes distance from the
         # search location. However, empirically this did not seem to help.
         # shape=(H,)
-        return np.max(
+        evidence = np.max(
             radius_evidence,  # * node_distance_weights,
             axis=1,
         )
+        return evidence, n_nodes_in_radius, nearest_distance
+
+    def _count_nodes_within_custom_radius(
+        self,
+        graph_id: str,
+        input_channel: str,
+        search_locations: npt.NDArray[np.float64],
+        sensed_normals: npt.NDArray[np.float64],
+        curvature: float,
+    ) -> npt.NDArray[np.int_]:
+        """Count stored nodes whose custom distance is below `max_match_distance`.
+
+        Uses an Euclidean prefilter on the graph's KDTree to get a (tight)
+        superset of candidates for each search location, then computes the
+        custom distance on that subset only and counts the matches.
+        """
+        num_search = len(search_locations)
+        graph = self.graph_memory.get_graph(graph_id, input_channel)
+        candidate_ids_per_hyp = graph.query_within_radius(
+            search_locations, self.max_match_distance
+        )
+        candidate_lengths = np.array(
+            [len(c) for c in candidate_ids_per_hyp], dtype=np.int_
+        )
+        if candidate_lengths.sum() == 0:
+            return np.zeros(num_search, dtype=np.int_)
+
+        hyp_idx_per_candidate = np.repeat(
+            np.arange(num_search), candidate_lengths
+        )
+        all_candidate_ids = np.concatenate(candidate_ids_per_hyp)
+        node_locs = self.graph_memory.get_locations_in_graph(
+            graph_id, input_channel
+        )
+        diffs = node_locs[all_candidate_ids] - search_locations[
+            hyp_idx_per_candidate
+        ]
+        euclidean = np.linalg.norm(diffs, axis=1)
+        dot_products = np.sum(
+            diffs * sensed_normals[hyp_idx_per_candidate], axis=1
+        )
+        custom = euclidean + np.abs(dot_products) / (np.abs(curvature) + 0.5)
+        in_radius = custom < self.max_match_distance
+        return np.bincount(
+            hyp_idx_per_candidate[in_radius], minlength=num_search
+        ).astype(np.int_)
 
     def _get_node_distance_weights(self, distances):
         return (self.max_match_distance - distances) / self.max_match_distance

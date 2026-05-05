@@ -343,6 +343,8 @@ class BurstSamplingHypothesesUpdater:
             tracker=tracker,
         )
 
+        is_sampling = len(new_hypotheses.evidence) > 0
+
         # We only displace existing hypotheses since the newly sampled hypotheses
         # should not be affected by the displacement from the last sensory input.
         if len(hypotheses_selection.ids_to_retain):
@@ -353,6 +355,7 @@ class BurstSamplingHypothesesUpdater:
                     evidence_update_threshold=evidence_update_threshold,
                     graph_id=graph_id,
                     possible_hypotheses=existing_hypotheses,
+                    is_sampling=is_sampling,
                 )
             )
         else:
