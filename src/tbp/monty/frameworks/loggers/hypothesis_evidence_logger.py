@@ -131,11 +131,12 @@ def log(
         mlh_index: Index of the most-likely hypothesis in the full hypothesis space.
         hyp_idxs_tested: Indices (into the full hypothesis space) of hypotheses that
             had evidence above the update threshold and were re-evaluated this step.
-        per_channel: Mapping `channel -> {"evidence", "n_nodes_in_radius",
-            "nearest_distance"}`. `evidence` has shape (H,) (full hypothesis space,
-            with min-update fill on untested hyps). `n_nodes_in_radius` and
-            `nearest_distance` have shape (H_tested,), aligned with
-            `hyp_idxs_tested`.
+        per_channel: Mapping `channel -> {"evidence",
+            "euclidean_n_nodes_in_radius", "euclidean_nearest_distance",
+            "custom_n_nodes_in_radius", "custom_nearest_distance"}`. `evidence`
+            has shape (H,) (full hypothesis space, with min-update fill on
+            untested hyps). The four diagnostic stats have shape (H_tested,),
+            aligned with `hyp_idxs_tested`.
         is_sampling: Whether new hypotheses were sampled this step for this graph.
     """
     if not _passes_filters(graph_id):
@@ -155,8 +156,18 @@ def log(
                 "channels": {
                     channel: {
                         "evidence": values["evidence"].tolist(),
-                        "n_nodes_in_radius": values["n_nodes_in_radius"].tolist(),
-                        "nearest_distance": values["nearest_distance"].tolist(),
+                        "euclidean_n_nodes_in_radius": values[
+                            "euclidean_n_nodes_in_radius"
+                        ].tolist(),
+                        "euclidean_nearest_distance": values[
+                            "euclidean_nearest_distance"
+                        ].tolist(),
+                        "custom_n_nodes_in_radius": values[
+                            "custom_n_nodes_in_radius"
+                        ].tolist(),
+                        "custom_nearest_distance": values[
+                            "custom_nearest_distance"
+                        ].tolist(),
                     }
                     for channel, values in per_channel.items()
                 },

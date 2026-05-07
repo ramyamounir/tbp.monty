@@ -174,7 +174,7 @@ class DefaultHypothesesDisplacer:
             total_evidence_to_add = np.zeros_like(possible_hypotheses.evidence)
             per_channel: dict[str, dict[str, np.ndarray]] = {}
             for channel in input_channels:
-                new_evidence, n_nodes_in_radius, nearest_distance = (
+                new_evidence, channel_stats = (
                     self._calculate_evidence_for_new_locations(
                         graph_id=graph_id,
                         input_channel=channel,
@@ -192,11 +192,7 @@ class DefaultHypothesesDisplacer:
                 )
                 channel_evidence[hyp_idxs_to_test] = new_evidence
                 total_evidence_to_add += channel_evidence
-                per_channel[channel] = {
-                    "evidence": channel_evidence,
-                    "n_nodes_in_radius": n_nodes_in_radius,
-                    "nearest_distance": nearest_distance,
-                }
+                per_channel[channel] = {"evidence": channel_evidence, **channel_stats}
 
             # Prediction error from summed evidence
             mlh_index = np.argmax(possible_hypotheses.evidence)
@@ -250,8 +246,7 @@ class DefaultHypothesesDisplacer:
         channel_features: dict,
     ) -> tuple[
         npt.NDArray[np.float64],
-        npt.NDArray[np.int_],
-        npt.NDArray[np.float64],
+        dict[str, npt.NDArray],
     ]:
         """Use search locations, sensed features and graph model to calculate evidence.
 
@@ -265,12 +260,21 @@ class DefaultHypothesesDisplacer:
         We do this for every incoming input channel and its features if they are stored
         in the graph and take the average over the evidence from all input channels.
 
+        Internally, K-NN scoring and the in-radius mask used to compute `evidence`
+        rely on the *custom* surface-corrected distance. The diagnostic stats
+        returned alongside are reported in both Euclidean and custom-distance
+        flavors so the JSONL log captures both views per channel.
+
         Returns:
-            A 3-tuple per tested hypothesis:
-                - location evidence (max over the K nearest neighbors),
-                - count of all stored nodes whose custom distance to the search
-                  location is below `max_match_distance` (not capped at K),
-                - distance to the closest of the K nearest neighbors.
+            (evidence, channel_stats) where:
+                - evidence: per-tested-hypothesis location evidence (max over the K
+                  nearest neighbors, scored by custom distance).
+                - channel_stats: dict with keys
+                    `euclidean_n_nodes_in_radius`, `euclidean_nearest_distance`,
+                    `custom_n_nodes_in_radius`, `custom_nearest_distance`.
+                    Counts cover all stored nodes within `max_match_distance`
+                    (not capped at K). Distances are minima over the K nearest
+                    neighbors.
         """
         logger.debug(
             f"Calculating evidence for {graph_id} using input from {input_channel}"
@@ -306,14 +310,30 @@ class DefaultHypothesesDisplacer:
         )
         # Get IDs where custom_nearest_node_dists > max_match_distance
         mask = node_distance_weights <= 0
-        nearest_distance = custom_nearest_node_dists.min(axis=1)
-        n_nodes_in_radius = self._count_nodes_within_custom_radius(
-            graph_id=graph_id,
-            input_channel=input_channel,
-            search_locations=search_locations,
-            sensed_normals=pose_transformed_features["pose_vectors"][:, 0],
-            curvature=max_abs_curvature,
+        # Diagnostic stats — both Euclidean and custom-distance variants are
+        # reported for logging. Euclidean variants make nearest_distance and
+        # n_nodes_in_radius directly comparable across channels; custom variants
+        # mirror the surface-corrected distance used by evidence-matching.
+        euclidean_nearest_node_dists = np.linalg.norm(
+            nearest_node_locs - search_locations[:, np.newaxis, :], axis=2
         )
+        sensed_normals = pose_transformed_features["pose_vectors"][:, 0]
+        channel_stats = {
+            "euclidean_nearest_distance": euclidean_nearest_node_dists.min(axis=1),
+            "custom_nearest_distance": custom_nearest_node_dists.min(axis=1),
+            "euclidean_n_nodes_in_radius": self._count_nodes_within_radius(
+                graph_id=graph_id,
+                input_channel=input_channel,
+                search_locations=search_locations,
+            ),
+            "custom_n_nodes_in_radius": self._count_nodes_within_custom_radius(
+                graph_id=graph_id,
+                input_channel=input_channel,
+                search_locations=search_locations,
+                sensed_normals=sensed_normals,
+                max_abs_curvature=max_abs_curvature,
+            ),
+        }
 
         new_pos_features = self.graph_memory.get_features_at_node(
             graph_id,
@@ -377,7 +397,27 @@ class DefaultHypothesesDisplacer:
             radius_evidence,  # * node_distance_weights,
             axis=1,
         )
-        return evidence, n_nodes_in_radius, nearest_distance
+
+        return evidence, channel_stats
+
+    def _count_nodes_within_radius(
+        self,
+        graph_id: str,
+        input_channel: str,
+        search_locations: npt.NDArray[np.float64],
+    ) -> npt.NDArray[np.int_]:
+        """Count stored nodes within Euclidean `max_match_distance` of each location.
+
+        Logged as `euclidean_n_nodes_in_radius` per channel; not used by evidence
+        math.
+        """
+        graph = self.graph_memory.get_graph(graph_id, input_channel)
+        candidate_ids_per_hyp = graph.query_within_radius(
+            search_locations, self.max_match_distance
+        )
+        return np.array(
+            [len(c) for c in candidate_ids_per_hyp], dtype=np.int_
+        )
 
     def _count_nodes_within_custom_radius(
         self,
@@ -385,44 +425,35 @@ class DefaultHypothesesDisplacer:
         input_channel: str,
         search_locations: npt.NDArray[np.float64],
         sensed_normals: npt.NDArray[np.float64],
-        curvature: float,
+        max_abs_curvature: float,
     ) -> npt.NDArray[np.int_]:
-        """Count stored nodes whose custom distance is below `max_match_distance`.
+        """Count stored nodes within custom `max_match_distance` of each location.
 
-        Uses an Euclidean prefilter on the graph's KDTree to get a (tight)
-        superset of candidates for each search location, then computes the
-        custom distance on that subset only and counts the matches.
+        Logged as `custom_n_nodes_in_radius` per channel; not used by evidence
+        math. Mirrors the surface-corrected distance used by evidence-matching.
+        Custom distance is always >= Euclidean, so the Euclidean radius query
+        gives a superset which we then filter by custom distance.
         """
-        num_search = len(search_locations)
         graph = self.graph_memory.get_graph(graph_id, input_channel)
         candidate_ids_per_hyp = graph.query_within_radius(
             search_locations, self.max_match_distance
         )
-        candidate_lengths = np.array(
-            [len(c) for c in candidate_ids_per_hyp], dtype=np.int_
-        )
-        if candidate_lengths.sum() == 0:
-            return np.zeros(num_search, dtype=np.int_)
-
-        hyp_idx_per_candidate = np.repeat(
-            np.arange(num_search), candidate_lengths
-        )
-        all_candidate_ids = np.concatenate(candidate_ids_per_hyp)
-        node_locs = self.graph_memory.get_locations_in_graph(
+        node_locations = self.graph_memory.get_locations_in_graph(
             graph_id, input_channel
         )
-        diffs = node_locs[all_candidate_ids] - search_locations[
-            hyp_idx_per_candidate
-        ]
-        euclidean = np.linalg.norm(diffs, axis=1)
-        dot_products = np.sum(
-            diffs * sensed_normals[hyp_idx_per_candidate], axis=1
-        )
-        custom = euclidean + np.abs(dot_products) / (np.abs(curvature) + 0.5)
-        in_radius = custom < self.max_match_distance
-        return np.bincount(
-            hyp_idx_per_candidate[in_radius], minlength=num_search
-        ).astype(np.int_)
+        counts = np.zeros(len(candidate_ids_per_hyp), dtype=np.int_)
+        for h, candidate_ids in enumerate(candidate_ids_per_hyp):
+            if len(candidate_ids) == 0:
+                continue
+            cand_locs = node_locations[candidate_ids][np.newaxis, :, :]
+            custom_dists = get_custom_distances(
+                cand_locs,
+                search_locations[h : h + 1],
+                sensed_normals[h : h + 1],
+                max_abs_curvature,
+            )
+            counts[h] = int((custom_dists[0] <= self.max_match_distance).sum())
+        return counts
 
     def _get_node_distance_weights(self, distances):
         return (self.max_match_distance - distances) / self.max_match_distance

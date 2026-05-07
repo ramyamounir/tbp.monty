@@ -61,15 +61,18 @@ class DefaultHypothesesDisplacerTest(TestCase):
             "channel_a": np.array([0.5, 0.5, 0.5]),
             "channel_b": np.array([1.0, 0.0, -1.0]),
         }
-        n_in_radius = np.zeros(num_hyps, dtype=np.int_)
-        nearest_dist = np.zeros(num_hyps)
+        stats = {
+            "euclidean_n_nodes_in_radius": np.zeros(num_hyps, dtype=np.int_),
+            "euclidean_nearest_distance": np.zeros(num_hyps),
+            "custom_n_nodes_in_radius": np.zeros(num_hyps, dtype=np.int_),
+            "custom_nearest_distance": np.zeros(num_hyps),
+        }
         with patch.object(
             self.displacer,
             "_calculate_evidence_for_new_locations",
             side_effect=lambda **kw: (
                 evidence_by_channel[kw["input_channel"]],
-                n_in_radius,
-                nearest_dist,
+                stats,
             ),
         ):
             result, _telemetry = (
@@ -104,16 +107,19 @@ class DefaultHypothesesDisplacerTest(TestCase):
             "channel_a": np.array([1.5, 0.5]),
             "channel_b": np.array([0.5, -0.5]),
         }
-        n_in_radius = np.zeros(num_hyps, dtype=np.int_)
-        nearest_dist = np.zeros(num_hyps)
+        stats = {
+            "euclidean_n_nodes_in_radius": np.zeros(num_hyps, dtype=np.int_),
+            "euclidean_nearest_distance": np.zeros(num_hyps),
+            "custom_n_nodes_in_radius": np.zeros(num_hyps, dtype=np.int_),
+            "custom_nearest_distance": np.zeros(num_hyps),
+        }
 
         with patch.object(
             self.displacer,
             "_calculate_evidence_for_new_locations",
             side_effect=lambda **kw: (
                 evidence_by_channel[kw["input_channel"]],
-                n_in_radius,
-                nearest_dist,
+                stats,
             ),
         ):
             _, telemetry = self.displacer.displace_hypotheses_and_compute_evidence(
