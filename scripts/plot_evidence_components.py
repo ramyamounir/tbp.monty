@@ -13,9 +13,10 @@ hypothesis (ring) and the hypothesis with the highest pose+feature evidence
 (star). Out-of-reference-frame hypotheses are dropped throughout. If a
 `graph_nodes.npz` (written by `hypothesis_evidence_logger.dump_graphs`) is
 present in the input dir, the primary target's `learning_module_0` graph nodes
-are drawn as a small 3D inset under the legend, colored by the per-node
-`object_id` feature. Style mirrors the prediction error scatter plots in the
-`debug_pred_error` branch.
+are drawn as small 3D insets stacked under the legend -- one per distinct
+per-node `object_id` value, all sharing the same spatial bounds, with a single
+color legend above them. Style mirrors the prediction error scatter plots in
+the `debug_pred_error` branch.
 """
 
 from __future__ import annotations
@@ -276,17 +277,20 @@ def _plot_step_scatter(
     ax.tick_params(labelsize=7)
 
 
-def _add_graph_nodes_inset(
+def _add_graph_node_insets(
     fig,
     legend,
     primary_target: str,
     graph_nodes: dict[str, np.ndarray],
     code_to_name: dict[float, str],
 ) -> None:
-    """Draw the primary target's INPUT_CHANNEL graph nodes as a 3D inset.
+    """Draw the primary target's INPUT_CHANNEL graph nodes split by object_id.
 
-    Placed in the white area under `legend`; nodes are colored by their
-    per-node `object_id` feature (single color if it was not dumped).
+    One small 3D subplot per distinct per-node `object_id` value, stacked
+    vertically in the white area under `legend`, all sharing the same spatial
+    bounds so the colored subsets are spatially comparable. A single color
+    legend mapping each `object_id` to its name sits above the stack. If the
+    `object_id` feature was not dumped, a single uncolored subplot is drawn.
     """
     suffix = f"__{primary_target}__{INPUT_CHANNEL}"
     pos_keys = [
@@ -296,66 +300,80 @@ def _add_graph_nodes_inset(
     ]
     if not pos_keys:
         return
-    pos_key = pos_keys[0]
-    points = np.asarray(graph_nodes[pos_key], dtype=np.float64)
+    points = np.asarray(graph_nodes[pos_keys[0]], dtype=np.float64)
     if points.size == 0:
         return
-    object_ids = graph_nodes.get(f"{pos_key}__object_id")
+    object_ids = graph_nodes.get(f"{pos_keys[0]}__object_id")
 
-    fig.canvas.draw()
-    leg_bbox = legend.get_window_extent().transformed(fig.transFigure.inverted())
-    fig_w, fig_h = fig.get_size_inches()
-    inset_left = leg_bbox.x0
-    inset_width = max(leg_bbox.width, 0.13)
-    inset_height = inset_width * fig_w / fig_h
-    inset_top = leg_bbox.y0 - 0.04
-    inset_bottom = inset_top - inset_height
-    ax3d = fig.add_axes(
-        [inset_left, inset_bottom, inset_width, inset_height], projection="3d"
-    )
-
-    color_handles: list[Line2D] = []
+    cmap = plt.get_cmap(GRAPH_NODE_CMAP)
+    groups: list[tuple[str, object, np.ndarray]] = []
     if object_ids is None:
-        ax3d.scatter(
-            points[:, 0], points[:, 1], points[:, 2],
-            color=SUB_POINT_COLOR, s=5, alpha=0.6, edgecolors="none",
+        groups.append(
+            (f"{primary_target}\n{INPUT_CHANNEL}", SUB_POINT_COLOR,
+             np.ones(len(points), dtype=bool))
         )
     else:
         object_ids = np.asarray(object_ids, dtype=np.float64)
-        cmap = plt.get_cmap(GRAPH_NODE_CMAP)
         for i, code in enumerate(np.unique(object_ids)):
-            color = cmap(i % cmap.N)
-            mask = object_ids == code
-            ax3d.scatter(
-                points[mask, 0], points[mask, 1], points[mask, 2],
-                color=color, s=5, alpha=0.7, edgecolors="none",
-            )
-            color_handles.append(
-                Line2D(
-                    [0], [0], marker="o", linestyle="",
-                    markerfacecolor=color, markeredgecolor="none", markersize=7,
-                    label=code_to_name.get(code, f"id {code:g}"),
-                )
+            groups.append(
+                (code_to_name.get(code, f"id {code:g}"), cmap(i % cmap.N),
+                 object_ids == code)
             )
 
-    half = (points.max(axis=0) - points.min(axis=0)).max() / 2 or 1.0
-    center = (points.max(axis=0) + points.min(axis=0)) / 2
-    ax3d.set_xlim(center[0] - half, center[0] + half)
-    ax3d.set_ylim(center[1] - half, center[1] + half)
-    ax3d.set_zlim(center[2] - half, center[2] + half)
-    ax3d.set_axis_off()
-    ax3d.view_init(elev=30, azim=45)
-    ax3d.set_title(f"{primary_target}\n{INPUT_CHANNEL} graph nodes", fontsize=7, pad=0)
+    fig.canvas.draw()
+    leg_bbox = legend.get_window_extent().transformed(fig.transFigure.inverted())
+    left = leg_bbox.x0
+    width = max(leg_bbox.width, 0.14)
 
-    if color_handles:
-        fig.legend(
-            handles=color_handles,
+    if object_ids is None:
+        stack_top = leg_bbox.y0 - 0.03
+    else:
+        handles = [
+            Line2D(
+                [0], [0], marker="o", linestyle="",
+                markerfacecolor=color, markeredgecolor="none", markersize=7,
+                label=name,
+            )
+            for name, color, _ in groups
+        ]
+        color_legend = fig.legend(
+            handles=handles,
             loc="upper left",
-            bbox_to_anchor=(inset_left, inset_bottom - 0.005),
+            bbox_to_anchor=(left, leg_bbox.y0 - 0.02),
             fontsize=7,
             framealpha=0.9,
             title="node object_id",
             title_fontsize=7,
+        )
+        fig.canvas.draw()
+        colorleg_bbox = color_legend.get_window_extent().transformed(
+            fig.transFigure.inverted()
+        )
+        stack_top = colorleg_bbox.y0 - 0.01
+
+    bottom = 0.04
+    slot_h = (stack_top - bottom) / len(groups)
+
+    half = (points.max(axis=0) - points.min(axis=0)).max() / 2 or 1.0
+    center = (points.max(axis=0) + points.min(axis=0)) / 2
+    for i, (name, color, mask) in enumerate(groups):
+        slot_bottom = stack_top - (i + 1) * slot_h
+        ax3d = fig.add_axes(
+            [left, slot_bottom + slot_h * 0.05, width, slot_h * 0.88],
+            projection="3d",
+        )
+        ax3d.scatter(
+            points[mask, 0], points[mask, 1], points[mask, 2],
+            color=color, s=5, alpha=0.7, edgecolors="none",
+        )
+        ax3d.set_xlim(center[0] - half, center[0] + half)
+        ax3d.set_ylim(center[1] - half, center[1] + half)
+        ax3d.set_zlim(center[2] - half, center[2] + half)
+        ax3d.set_axis_off()
+        ax3d.view_init(elev=30, azim=45)
+        ax3d.text2D(
+            0.0, 1.0, f"{name}  (n={int(mask.sum())})",
+            transform=ax3d.transAxes, fontsize=6, va="top",
         )
 
 
@@ -455,7 +473,7 @@ def plot_episode(
         _plot_step_scatter(sub_ax, df[df["step"] == step], step, show_ylabel=(i == 0))
 
     if graph_nodes:
-        _add_graph_nodes_inset(fig, legend, primary_target, graph_nodes, code_to_name)
+        _add_graph_node_insets(fig, legend, primary_target, graph_nodes, code_to_name)
 
     fig.savefig(out_path, dpi=120, bbox_inches="tight")
     plt.close(fig)
