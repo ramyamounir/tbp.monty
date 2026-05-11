@@ -13,7 +13,6 @@ from pathlib import Path
 
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
-from scipy.spatial.transform import Rotation
 
 from tbp.monty.context import RuntimeContext
 from tbp.monty.experiment.environment import (
@@ -25,6 +24,7 @@ from tbp.monty.frameworks.experiments.monty_experiment import (
     MontyExperiment,
 )
 from tbp.monty.frameworks.loggers import hypothesis_evidence_logger
+from tbp.monty.geometry import Rotation
 
 __all__ = ["MontySupervisedObjectPretrainingExperiment"]
 
