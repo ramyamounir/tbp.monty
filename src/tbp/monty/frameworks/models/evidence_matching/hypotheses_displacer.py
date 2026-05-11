@@ -174,7 +174,7 @@ class DefaultHypothesesDisplacer:
             total_evidence_to_add = np.zeros_like(possible_hypotheses.evidence)
             per_channel: dict[str, dict[str, np.ndarray]] = {}
             for channel in input_channels:
-                new_evidence, channel_stats = (
+                new_pose, new_feature, channel_stats = (
                     self._calculate_evidence_for_new_locations(
                         graph_id=graph_id,
                         input_channel=channel,
@@ -185,6 +185,7 @@ class DefaultHypothesesDisplacer:
                         channel_features=features[channel],
                     )
                 )
+                new_evidence = new_pose + new_feature
                 min_update = np.clip(np.min(new_evidence), 0, np.inf)
 
                 channel_evidence = (
@@ -192,7 +193,12 @@ class DefaultHypothesesDisplacer:
                 )
                 channel_evidence[hyp_idxs_to_test] = new_evidence
                 total_evidence_to_add += channel_evidence
-                per_channel[channel] = {"evidence": channel_evidence, **channel_stats}
+                per_channel[channel] = {
+                    "evidence": channel_evidence,
+                    "pose_evidence": new_pose,
+                    "feature_evidence": new_feature,
+                    **channel_stats,
+                }
 
             # Prediction error from summed evidence
             mlh_index = np.argmax(possible_hypotheses.evidence)
@@ -246,6 +252,7 @@ class DefaultHypothesesDisplacer:
         channel_features: dict,
     ) -> tuple[
         npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
         dict[str, npt.NDArray],
     ]:
         """Use search locations, sensed features and graph model to calculate evidence.
@@ -260,15 +267,20 @@ class DefaultHypothesesDisplacer:
         We do this for every incoming input channel and its features if they are stored
         in the graph and take the average over the evidence from all input channels.
 
-        Internally, K-NN scoring and the in-radius mask used to compute `evidence`
+        Internally, K-NN scoring and the in-radius mask used to compute evidence
         rely on the *custom* surface-corrected distance. The diagnostic stats
         returned alongside are reported in both Euclidean and custom-distance
         flavors so the JSONL log captures both views per channel.
 
         Returns:
-            (evidence, channel_stats) where:
-                - evidence: per-tested-hypothesis location evidence (max over the K
-                  nearest neighbors, scored by custom distance).
+            (pose_evidence, feature_evidence, channel_stats) where:
+                - pose_evidence: per-tested-hypothesis pose evidence in [-1, 1],
+                  taken at the K-nearest neighbor that maximizes the combined
+                  pose + feature evidence.
+                - feature_evidence: per-tested-hypothesis feature evidence in
+                  [0, feature_evidence_increment], taken at the same neighbor.
+                  `pose_evidence + feature_evidence` equals the legacy combined
+                  location evidence.
                 - channel_stats: dict with keys
                     `euclidean_n_nodes_in_radius`, `euclidean_nearest_distance`,
                     `custom_n_nodes_in_radius`, `custom_nearest_distance`.
@@ -343,14 +355,14 @@ class DefaultHypothesesDisplacer:
         )
         # Calculate the pose error for each hypothesis
         # shape=(H, K)
-        radius_evidence = self._get_pose_evidence_matrix(
+        pose_matrix = self._get_pose_evidence_matrix(
             pose_transformed_features,
             new_pos_features,
             input_channel,
             node_distance_weights,
         )
         # Set the evidences which are too far away to -1
-        radius_evidence[mask] = -1
+        pose_matrix[mask] = -1
         # If a node is too far away, weight the negative evidence fully (*1). This
         # only comes into play if there are no nearby nodes in the radius, then we
         # want an evidence of -1 for this hypothesis.
@@ -374,17 +386,14 @@ class DefaultHypothesesDisplacer:
                 channel_tolerances=self.tolerances[input_channel],
                 input_channel=input_channel,
             )
-            hypothesis_radius_feature_evidence = node_feature_evidence[nearest_node_ids]
+            feature_matrix = node_feature_evidence[nearest_node_ids]
             # Set feature evidence of nearest neighbors that are too far away to 0
-            hypothesis_radius_feature_evidence[mask] = 0
-            # Take the maximum feature evidence out of the nearest neighbors in the
-            # search radius and weighted by its distance to the search location.
+            feature_matrix[mask] = 0
             # Evidence will be in [0, 1] and is only 1 if all features match
             # perfectly and the node is at the search location.
-            radius_evidence = (
-                radius_evidence
-                + hypothesis_radius_feature_evidence * self.feature_evidence_increment
-            )
+            feature_matrix = feature_matrix * self.feature_evidence_increment
+        else:
+            feature_matrix = np.zeros_like(pose_matrix)
         # We take the maximum to be better able to deal with parts of the model where
         # features change quickly and we may have noisy location information. This way
         # we check if we can find a good match of pose features within the search
@@ -392,13 +401,20 @@ class DefaultHypothesesDisplacer:
         # that are not a good match.
         # Removing the comment weights the evidence by the nodes distance from the
         # search location. However, empirically this did not seem to help.
-        # shape=(H,)
-        evidence = np.max(
-            radius_evidence,  # * node_distance_weights,
+        # shape=(H,). Pick the same winning neighbor for both components so their
+        # sum equals max(pose + feature) over the K neighbors.
+        best_neighbor = np.argmax(
+            pose_matrix + feature_matrix,  # * node_distance_weights,
             axis=1,
         )
+        pose_per_hyp = np.take_along_axis(
+            pose_matrix, best_neighbor[:, None], axis=1
+        ).squeeze(1)
+        feature_per_hyp = np.take_along_axis(
+            feature_matrix, best_neighbor[:, None], axis=1
+        ).squeeze(1)
 
-        return evidence, channel_stats
+        return pose_per_hyp, feature_per_hyp, channel_stats
 
     def _count_nodes_within_radius(
         self,

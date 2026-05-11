@@ -131,12 +131,15 @@ def log(
         mlh_index: Index of the most-likely hypothesis in the full hypothesis space.
         hyp_idxs_tested: Indices (into the full hypothesis space) of hypotheses that
             had evidence above the update threshold and were re-evaluated this step.
-        per_channel: Mapping `channel -> {"evidence",
-            "euclidean_n_nodes_in_radius", "euclidean_nearest_distance",
-            "custom_n_nodes_in_radius", "custom_nearest_distance"}`. `evidence`
-            has shape (H,) (full hypothesis space, with min-update fill on
-            untested hyps). The four diagnostic stats have shape (H_tested,),
-            aligned with `hyp_idxs_tested`.
+        per_channel: Mapping `channel -> {"evidence", "pose_evidence",
+            "feature_evidence", "euclidean_n_nodes_in_radius",
+            "euclidean_nearest_distance", "custom_n_nodes_in_radius",
+            "custom_nearest_distance"}`. `evidence` has shape (H,) (full
+            hypothesis space, with min-update fill on untested hyps).
+            `pose_evidence` (range [-1, 1]) and `feature_evidence` (range
+            [0, feature_evidence_increment]) have shape (H_tested,), aligned
+            with `hyp_idxs_tested`, and sum to the tested entries of `evidence`.
+            The four diagnostic stats also have shape (H_tested,).
         is_sampling: Whether new hypotheses were sampled this step for this graph.
     """
     if not _passes_filters(graph_id):
@@ -156,6 +159,8 @@ def log(
                 "channels": {
                     channel: {
                         "evidence": values["evidence"].tolist(),
+                        "pose_evidence": values["pose_evidence"].tolist(),
+                        "feature_evidence": values["feature_evidence"].tolist(),
                         "euclidean_n_nodes_in_radius": values[
                             "euclidean_n_nodes_in_radius"
                         ].tolist(),

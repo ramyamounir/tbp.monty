@@ -72,6 +72,7 @@ class DefaultHypothesesDisplacerTest(TestCase):
             "_calculate_evidence_for_new_locations",
             side_effect=lambda **kw: (
                 evidence_by_channel[kw["input_channel"]],
+                np.zeros_like(evidence_by_channel[kw["input_channel"]]),
                 stats,
             ),
         ):
@@ -119,6 +120,7 @@ class DefaultHypothesesDisplacerTest(TestCase):
             "_calculate_evidence_for_new_locations",
             side_effect=lambda **kw: (
                 evidence_by_channel[kw["input_channel"]],
+                np.zeros_like(evidence_by_channel[kw["input_channel"]]),
                 stats,
             ),
         ):
