@@ -89,8 +89,13 @@ def dump_graphs(model) -> None:
 
     Walks the Monty model's learning modules and writes every loaded graph's
     node positions to a sibling `graph_nodes.npz` next to the JSONL log.
-    Keys are formatted `f"{lm_id}__{graph_id}__{channel}"`. Respects
-    `INCLUDE_LEARNING_MODULES`. Skips if the file already exists.
+    Keys are formatted `f"{lm_id}__{graph_id}__{channel}"`. For channels that
+    store an `object_id` feature, the per-node object id is also written under
+    `f"{lm_id}__{graph_id}__{channel}__object_id"`, and a global table mapping
+    object-id codes to names is written under `__object_id_codes` /
+    `__object_id_names` (codes use the same `sum(ord(c) for c in name)`
+    encoding the LM uses). Respects `INCLUDE_LEARNING_MODULES`. Skips if the
+    file already exists.
 
     Call once at experiment setup (after graphs are loaded into LMs, before
     any episodes run).
@@ -99,21 +104,36 @@ def dump_graphs(model) -> None:
     out_path = Path(f.name).parent / "graph_nodes.npz"
     if out_path.exists():
         return
-    arrays: dict[str, npt.NDArray[np.float64]] = {}
+    arrays: dict[str, npt.NDArray] = {}
+    object_id_to_name: dict[float, str] = {}
     for lm in model.learning_modules:
         lm_id = lm.learning_module_id
-        if INCLUDE_LEARNING_MODULES and lm_id not in INCLUDE_LEARNING_MODULES:
-            continue
         graph_memory = lm.graph_memory
         for graph_id in graph_memory.get_memory_ids():
+            object_id_to_name[float(sum(ord(c) for c in graph_id))] = graph_id
+        if INCLUDE_LEARNING_MODULES and lm_id not in INCLUDE_LEARNING_MODULES:
+            continue
+        for graph_id in graph_memory.get_memory_ids():
             for input_channel in graph_memory.get_input_channels_in_graph(graph_id):
-                locs = np.asarray(
+                key = f"{lm_id}__{graph_id}__{input_channel}"
+                arrays[key] = np.asarray(
                     graph_memory.get_locations_in_graph(graph_id, input_channel),
                     dtype=np.float64,
                 )
-                arrays[f"{lm_id}__{graph_id}__{input_channel}"] = locs
+                graph = graph_memory.get_graph(graph_id, input_channel)
+                feature_mapping = getattr(graph, "feature_mapping", None) or {}
+                if "object_id" in feature_mapping:
+                    start, end = feature_mapping["object_id"]
+                    node_features = np.asarray(graph.x, dtype=np.float64)
+                    arrays[f"{key}__object_id"] = node_features[
+                        :, start:end
+                    ].reshape(-1)
     if not arrays:
         return
+    if object_id_to_name:
+        codes = sorted(object_id_to_name)
+        arrays["__object_id_codes"] = np.array(codes, dtype=np.float64)
+        arrays["__object_id_names"] = np.array([object_id_to_name[c] for c in codes])
     np.savez_compressed(out_path, **arrays)
 
 

@@ -7,8 +7,15 @@ episode into a sibling `<input_dir>_plots/` folder. Only the `learning_module_0`
 input channel is used. Each step gets two x-jittered columns: pose evidence
 (left) and feature evidence (right), one dot per tested hypothesis. There is
 x-jitter but no y-jitter. The MLH hypothesis is highlighted with a larger
-black-edged marker, and sampling steps are marked along the bottom. Style
-mirrors the prediction error scatter plots in the `debug_pred_error` branch.
+black-edged marker. Below the main plot, up to four small pose-vs-feature
+scatter subplots are drawn for randomly chosen steps; each highlights the MLH
+hypothesis (ring) and the hypothesis with the highest pose+feature evidence
+(star). Out-of-reference-frame hypotheses are dropped throughout. If a
+`graph_nodes.npz` (written by `hypothesis_evidence_logger.dump_graphs`) is
+present in the input dir, the primary target's `learning_module_0` graph nodes
+are drawn as a small 3D inset under the legend, colored by the per-node
+`object_id` feature. Style mirrors the prediction error scatter plots in the
+`debug_pred_error` branch.
 """
 
 from __future__ import annotations
@@ -25,6 +32,12 @@ from matplotlib.ticker import MaxNLocator
 
 INPUT_CHANNEL = "learning_module_0"
 
+# Hypotheses whose nearest stored node is farther than this (the LM's
+# `max_match_distance`) are out of reference frame: they always get pose
+# evidence -1 and feature evidence 0. Such hypotheses are asserted to look
+# like that and then dropped from the plot.
+MAX_MATCH_DISTANCE = 0.01
+
 POSE_COLOR = "#4C72B0"
 FEATURE_COLOR = "#DD8452"
 
@@ -34,6 +47,17 @@ X_JITTER_WIDTH = 0.15  # half-width of the uniform x-jitter within a column
 SCATTER_SIZE = 6
 SCATTER_ALPHA = 0.35
 MLH_SIZE = 45
+
+NUM_SUBPLOT_STEPS = 4  # max number of per-step pose-vs-feature subplots
+
+SUB_POINT_COLOR = "#888888"
+SUB_SCATTER_SIZE = 9
+SUB_SCATTER_ALPHA = 0.4
+SUB_MLH_SIZE = 140  # hollow ring around the MLH hypothesis
+SUB_BEST_COLOR = "#C44E52"
+SUB_BEST_SIZE = 90  # star on the highest pose+feature hypothesis
+
+GRAPH_NODE_CMAP = "tab10"  # color cycle for object_id classes in the node inset
 
 
 def parse_args() -> argparse.Namespace:
@@ -65,26 +89,37 @@ def load_files(files: list[Path]) -> pd.DataFrame:
     return pd.concat([pd.read_json(p, lines=True) for p in files], ignore_index=True)
 
 
-def consecutive_ranges(steps_sorted: list[int]) -> list[tuple[int, int]]:
-    if not steps_sorted:
-        return []
-    ranges = []
-    start = prev = steps_sorted[0]
-    for s in steps_sorted[1:]:
-        if s == prev + 1:
-            prev = s
-        else:
-            ranges.append((start, prev))
-            start = prev = s
-    ranges.append((start, prev))
-    return ranges
+def load_graph_nodes(
+    input_dir: Path,
+) -> tuple[dict[str, np.ndarray], dict[float, str]]:
+    """Load `graph_nodes.npz` if present.
+
+    Returns:
+        `(graph_nodes, code_to_name)` where `graph_nodes` maps
+        `f"{lm_id}__{graph_id}__{channel}"` (and `..__object_id`) to arrays, and
+        `code_to_name` maps each `object_id` code to its object name. Both are
+        empty if the file is missing.
+    """
+    path = input_dir / "graph_nodes.npz"
+    if not path.exists():
+        return {}, {}
+    with np.load(path) as npz:
+        data = {k: npz[k] for k in npz.files}
+    codes = data.pop("__object_id_codes", None)
+    names = data.pop("__object_id_names", None)
+    code_to_name: dict[float, str] = {}
+    if codes is not None and names is not None:
+        code_to_name = {float(c): str(n) for c, n in zip(codes, names)}
+    return data, code_to_name
 
 
 def explode_primary_target(group: pd.DataFrame, primary_target: str) -> pd.DataFrame:
     """Long-form rows for the primary target's tested hypotheses.
 
     One row per (step, tested hypothesis), restricted to the `INPUT_CHANNEL`
-    input channel.
+    input channel. Out-of-reference-frame hypotheses (nearest stored node
+    farther than `MAX_MATCH_DISTANCE`) are asserted to have pose evidence -1
+    and feature evidence 0, then dropped.
 
     Returns:
         DataFrame with columns `step`, `pose_evidence`, `feature_evidence`,
@@ -94,6 +129,7 @@ def explode_primary_target(group: pd.DataFrame, primary_target: str) -> pd.DataF
     pose: list[float] = []
     feature: list[float] = []
     is_mlh: list[bool] = []
+    nearest: list[float] = []
     for _, row in group[group["graph_id"] == primary_target].iterrows():
         channel_values = row["channels"].get(INPUT_CHANNEL)
         if channel_values is None:
@@ -104,6 +140,9 @@ def explode_primary_target(group: pd.DataFrame, primary_target: str) -> pd.DataF
         channel_feature = np.asarray(
             channel_values["feature_evidence"], dtype=np.float64
         )
+        channel_nearest = np.asarray(
+            channel_values["custom_nearest_distance"], dtype=np.float64
+        )
         n = len(channel_pose)
         mlh_flags = np.zeros(n, dtype=bool)
         if mlh_pos.size:
@@ -112,12 +151,30 @@ def explode_primary_target(group: pd.DataFrame, primary_target: str) -> pd.DataF
         pose.extend(channel_pose.tolist())
         feature.extend(channel_feature.tolist())
         is_mlh.extend(mlh_flags.tolist())
+        nearest.extend(channel_nearest.tolist())
+
+    step_arr = np.asarray(steps, dtype=np.int_)
+    pose_arr = np.asarray(pose, dtype=np.float64)
+    feature_arr = np.asarray(feature, dtype=np.float64)
+    mlh_arr = np.asarray(is_mlh, dtype=bool)
+    nearest_arr = np.asarray(nearest, dtype=np.float64)
+
+    out_of_rf = nearest_arr > MAX_MATCH_DISTANCE
+    assert np.all(pose_arr[out_of_rf] == -1.0), (
+        "out-of-frame hypotheses should have pose evidence -1, got "
+        f"{np.unique(pose_arr[out_of_rf])}"
+    )
+    assert np.all(feature_arr[out_of_rf] == 0.0), (
+        "out-of-frame hypotheses should have feature evidence 0, got "
+        f"{np.unique(feature_arr[out_of_rf])}"
+    )
+    keep = ~out_of_rf
     return pd.DataFrame(
         {
-            "step": np.asarray(steps, dtype=np.int_),
-            "pose_evidence": np.asarray(pose, dtype=np.float64),
-            "feature_evidence": np.asarray(feature, dtype=np.float64),
-            "is_mlh": np.asarray(is_mlh, dtype=bool),
+            "step": step_arr[keep],
+            "pose_evidence": pose_arr[keep],
+            "feature_evidence": feature_arr[keep],
+            "is_mlh": mlh_arr[keep],
         }
     )
 
@@ -160,15 +217,165 @@ def _scatter_mlh(ax, steps, values, sign, color, rng) -> None:
     )
 
 
+def _pick_subplot_steps(steps: np.ndarray, rng: np.random.Generator) -> list[int]:
+    unique_steps = np.unique(steps)
+    count = min(NUM_SUBPLOT_STEPS, len(unique_steps))
+    chosen = rng.choice(unique_steps, size=count, replace=False)
+    return sorted(int(s) for s in chosen)
+
+
+def _plot_step_scatter(
+    ax, step_df: pd.DataFrame, step: int, show_ylabel: bool
+) -> None:
+    pose = step_df["pose_evidence"].to_numpy()
+    feature = step_df["feature_evidence"].to_numpy()
+    is_mlh = step_df["is_mlh"].to_numpy()
+
+    ax.axhline(0.0, color="gray", linewidth=0.6, linestyle=":", alpha=0.6, zorder=1)
+    ax.scatter(
+        feature,
+        pose,
+        s=SUB_SCATTER_SIZE,
+        color=SUB_POINT_COLOR,
+        alpha=SUB_SCATTER_ALPHA,
+        linewidths=0,
+        zorder=2,
+    )
+
+    best = int(np.argmax(pose + feature))
+    ax.scatter(
+        feature[best],
+        pose[best],
+        marker="*",
+        s=SUB_BEST_SIZE,
+        color=SUB_BEST_COLOR,
+        edgecolors="black",
+        linewidths=0.5,
+        zorder=4,
+    )
+    if is_mlh.any():
+        mlh = int(np.argmax(is_mlh))
+        ax.scatter(
+            feature[mlh],
+            pose[mlh],
+            marker="o",
+            s=SUB_MLH_SIZE,
+            facecolors="none",
+            edgecolors="black",
+            linewidths=1.0,
+            zorder=5,
+        )
+
+    ax.set_title(f"step {step}", fontsize=9)
+    ax.set_xlabel("feature evidence", fontsize=8)
+    if show_ylabel:
+        ax.set_ylabel("pose evidence", fontsize=8)
+    ax.set_xlim(-0.15, 1.15)
+    ax.set_xticks([0, 1])
+    ax.set_ylim(-1.05, 1.05)
+    ax.tick_params(labelsize=7)
+
+
+def _add_graph_nodes_inset(
+    fig,
+    legend,
+    primary_target: str,
+    graph_nodes: dict[str, np.ndarray],
+    code_to_name: dict[float, str],
+) -> None:
+    """Draw the primary target's INPUT_CHANNEL graph nodes as a 3D inset.
+
+    Placed in the white area under `legend`; nodes are colored by their
+    per-node `object_id` feature (single color if it was not dumped).
+    """
+    suffix = f"__{primary_target}__{INPUT_CHANNEL}"
+    pos_keys = [
+        k
+        for k in graph_nodes
+        if k.endswith(suffix) and not k.endswith("__object_id")
+    ]
+    if not pos_keys:
+        return
+    pos_key = pos_keys[0]
+    points = np.asarray(graph_nodes[pos_key], dtype=np.float64)
+    if points.size == 0:
+        return
+    object_ids = graph_nodes.get(f"{pos_key}__object_id")
+
+    fig.canvas.draw()
+    leg_bbox = legend.get_window_extent().transformed(fig.transFigure.inverted())
+    fig_w, fig_h = fig.get_size_inches()
+    inset_left = leg_bbox.x0
+    inset_width = max(leg_bbox.width, 0.13)
+    inset_height = inset_width * fig_w / fig_h
+    inset_top = leg_bbox.y0 - 0.04
+    inset_bottom = inset_top - inset_height
+    ax3d = fig.add_axes(
+        [inset_left, inset_bottom, inset_width, inset_height], projection="3d"
+    )
+
+    color_handles: list[Line2D] = []
+    if object_ids is None:
+        ax3d.scatter(
+            points[:, 0], points[:, 1], points[:, 2],
+            color=SUB_POINT_COLOR, s=5, alpha=0.6, edgecolors="none",
+        )
+    else:
+        object_ids = np.asarray(object_ids, dtype=np.float64)
+        cmap = plt.get_cmap(GRAPH_NODE_CMAP)
+        for i, code in enumerate(np.unique(object_ids)):
+            color = cmap(i % cmap.N)
+            mask = object_ids == code
+            ax3d.scatter(
+                points[mask, 0], points[mask, 1], points[mask, 2],
+                color=color, s=5, alpha=0.7, edgecolors="none",
+            )
+            color_handles.append(
+                Line2D(
+                    [0], [0], marker="o", linestyle="",
+                    markerfacecolor=color, markeredgecolor="none", markersize=7,
+                    label=code_to_name.get(code, f"id {code:g}"),
+                )
+            )
+
+    half = (points.max(axis=0) - points.min(axis=0)).max() / 2 or 1.0
+    center = (points.max(axis=0) + points.min(axis=0)) / 2
+    ax3d.set_xlim(center[0] - half, center[0] + half)
+    ax3d.set_ylim(center[1] - half, center[1] + half)
+    ax3d.set_zlim(center[2] - half, center[2] + half)
+    ax3d.set_axis_off()
+    ax3d.view_init(elev=30, azim=45)
+    ax3d.set_title(f"{primary_target}\n{INPUT_CHANNEL} graph nodes", fontsize=7, pad=0)
+
+    if color_handles:
+        fig.legend(
+            handles=color_handles,
+            loc="upper left",
+            bbox_to_anchor=(inset_left, inset_bottom - 0.005),
+            fontsize=7,
+            framealpha=0.9,
+            title="node object_id",
+            title_fontsize=7,
+        )
+
+
 def plot_episode(
     df: pd.DataFrame,
     episode: int,
     primary_target: str,
-    sampling_ranges: list[tuple[int, int]],
     out_path: Path,
     rng: np.random.Generator,
+    graph_nodes: dict[str, np.ndarray],
+    code_to_name: dict[float, str],
 ) -> None:
-    fig, ax = plt.subplots(figsize=(12, 6))
+    chosen_steps = _pick_subplot_steps(df["step"].to_numpy(), rng)
+
+    fig = plt.figure(figsize=(12, 9))
+    grid = fig.add_gridspec(2, 1, height_ratios=[2.2, 1.0], hspace=0.3)
+    ax = fig.add_subplot(grid[0])
+    sub_grid = grid[1].subgridspec(1, max(len(chosen_steps), 1), wspace=0.3)
+    sub_axes = [fig.add_subplot(sub_grid[0, i]) for i in range(len(chosen_steps))]
+
     ax.axhline(0.0, color="gray", linewidth=0.8, linestyle=":", alpha=0.6, zorder=1)
 
     steps = df["step"].to_numpy()
@@ -180,17 +387,6 @@ def plot_episode(
     _scatter_column(ax, steps[~mlh], feature[~mlh], +1, FEATURE_COLOR, rng)
     _scatter_mlh(ax, steps[mlh], pose[mlh], -1, POSE_COLOR, rng)
     _scatter_mlh(ax, steps[mlh], feature[mlh], +1, FEATURE_COLOR, rng)
-
-    for start, end in sampling_ranges:
-        ax.axvspan(
-            start - 0.5,
-            end + 0.5,
-            ymin=0.0,
-            ymax=0.025,
-            color="red",
-            alpha=0.9,
-            zorder=0.5,
-        )
 
     ax.set_xlabel("step")
     ax.set_ylabel("evidence")
@@ -233,11 +429,20 @@ def plot_episode(
                 label="MLH hypothesis",
             )
         )
-    if sampling_ranges:
-        handles.append(
-            Line2D([0], [0], color="red", linewidth=6, label="sampling steps")
+    handles.append(
+        Line2D(
+            [0],
+            [0],
+            marker="*",
+            linestyle="",
+            markerfacecolor=SUB_BEST_COLOR,
+            markeredgecolor="black",
+            markeredgewidth=0.5,
+            markersize=13,
+            label="highest pose+feature (subplots)",
         )
-    ax.legend(
+    )
+    legend = ax.legend(
         handles=handles,
         loc="upper left",
         bbox_to_anchor=(1.02, 1.0),
@@ -245,6 +450,13 @@ def plot_episode(
         framealpha=0.9,
         borderaxespad=0.0,
     )
+
+    for i, (step, sub_ax) in enumerate(zip(chosen_steps, sub_axes)):
+        _plot_step_scatter(sub_ax, df[df["step"] == step], step, show_ylabel=(i == 0))
+
+    if graph_nodes:
+        _add_graph_nodes_inset(fig, legend, primary_target, graph_nodes, code_to_name)
+
     fig.savefig(out_path, dpi=120, bbox_inches="tight")
     plt.close(fig)
 
@@ -262,6 +474,12 @@ def main() -> None:
     output_dir = args.input_dir.parent / f"{args.input_dir.name}_plots"
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    graph_nodes, code_to_name = load_graph_nodes(args.input_dir)
+    if graph_nodes:
+        print(f"Loaded {len(graph_nodes)} graph-node arrays from graph_nodes.npz")
+    else:
+        print("No graph_nodes.npz in input dir — node inset will be skipped.")
+
     df = load_files(files)
     rng = np.random.default_rng(args.seed)
 
@@ -275,14 +493,6 @@ def main() -> None:
             print(f"Episode {episode}: no primary_target_graph_id, skipping.")
             continue
 
-        if "is_sampling" in group:
-            sampling_steps = sorted(
-                {int(s) for s in group.loc[group["is_sampling"], "step"]}
-            )
-        else:
-            sampling_steps = []
-        sampling_ranges = consecutive_ranges(sampling_steps)
-
         ep_df = explode_primary_target(group, primary_target)
         if ep_df.empty:
             print(
@@ -292,7 +502,9 @@ def main() -> None:
             continue
 
         out = output_dir / f"episode_{episode}.png"
-        plot_episode(ep_df, int(episode), primary_target, sampling_ranges, out, rng)
+        plot_episode(
+            ep_df, int(episode), primary_target, out, rng, graph_nodes, code_to_name
+        )
         print(f"Wrote {out}  ({len(ep_df)} points)")
 
 
