@@ -1,0 +1,15 @@
+# @package experiment.config
+
+do_train: false
+do_eval: true
+eval_env_interface_args:
+  parent_to_child_mapping: null
+  object_names:
+    - 009_disk_numenta_horz
+    - 012_cylinder_tbp_horz
+    - 017_sphere_tbp_horz
+  object_init_sampler:
+    _target_: tbp.monty.frameworks.environments.object_init_samplers.Predefined
+    positions: [[0.0, 1.5, 0.0]]
+    rotations: [[0.0, 0.0, 0.0]]
+eval_env_interface_class: ${monty.class:tbp.monty.frameworks.environments.embodied_data.EnvironmentInterfacePerObject}
