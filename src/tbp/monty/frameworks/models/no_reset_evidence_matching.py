@@ -286,3 +286,7 @@ class NoResetEvidenceGraphLM(TheoreticalLimitLMLoggingMixin, EvidenceGraphLM):
             Whether the agent has moved since the last reset.
         """
         return self.last_location is not None
+
+
+class TheoreticalLimitEvidenceGraphLM(TheoreticalLimitLMLoggingMixin, EvidenceGraphLM):
+    pass
