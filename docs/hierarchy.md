@@ -160,6 +160,7 @@
   - [send-class-id-or-similarity-encoding-id-in-compositional-experiments](future-work/cmp-hierarchy-improvements/send-class-id-or-similarity-encoding-id-in-compositional-experiments.md)
   - [global-interval-timer](future-work/cmp-hierarchy-improvements/global-interval-timer.md)
   - [include-state-in-cmp](future-work/cmp-hierarchy-improvements/include-state-in-cmp.md)
+  - [extend-percept-filtering-to-lm-to-lm-messages](future-work/cmp-hierarchy-improvements/extend-percept-filtering-to-lm-to-lm-messages.md)
 - [environment-improvements](future-work/environment-improvements.md)
   - [replicable-real-world-test-bed](future-work/environment-improvements/replicable-real-world-test-bed.md)
   - [object-behavior-test-bed](future-work/environment-improvements/object-behavior-test-bed.md)
